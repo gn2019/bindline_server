@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BindLine</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>BindLine</h1>
+
+        <form id="upload-form">
+            <table class="table table-borderless align-middle mb-3">
+                <tr>
+                    <td><label for="e_score" class="form-label mb-0">E-Score File:</label></td>
+                    <td>
+                        <input class="form-control form-control-sm" type="file" id="e_score" name="e_score">
+                    </td>
+                    <td><label for="existing_escore" class="form-label mb-0">Or Existing:</label></td>
+                    <td>
+                        <select class="form-select form-select-sm" id="existing_escore"></select>
+                    </td>
+                </tr>
+                <tr>
+                    <td><label for="fasta" class="form-label mb-0">FASTA File:</label></td>
+                    <td>
+                        <input class="form-control form-control-sm" type="file" id="fasta" name="fasta">
+                    </td>
+                    <td><label for="existing_fasta" class="form-label mb-0">Or Existing:</label></td>
+                    <td>
+                        <select class="form-select form-select-sm" id="existing_fasta">
+                            <option value="">-- Select Existing --</option>
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" type="button" id="load-sequences">Load Sequences</button>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- File Type and Upload Button Row -->
+            <div class="d-flex align-items-center mb-2">
+                <label class="form-label mb-0 me-2">File Type:</label>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" id="escore" name="file_type" value="escore" checked>
+                    <label class="form-check-label" for="escore">E-Score</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" id="zscore" name="file_type" value="zscore">
+                    <label class="form-check-label" for="zscore">Z-Score</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" id="iscore" name="file_type" value="iscore">
+                    <label class="form-check-label" for="iscore">I-Score</label>
+                </div>
+                <button class="btn btn-success btn-sm ms-2" type="button" id="upload-and-plot">Upload & Plot</button>
+            </div>
+
+            <!-- Sequence Table and Buttons Row -->
+            <div class="d-flex align-items-center mb-2">
+                <button class="btn btn-secondary btn-sm me-2" type="button" id="add-sequence-row">Add Sequence</button>
+                <button class="btn btn-info btn-sm" type="button" id="add-line">Toggle Max Score Line</button>
+            </div>
+
+            <!-- Sequence Table -->
+            <div class="form-group mt-2">
+                <table class="table table-bordered table-striped table-sm" id="sequence-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Plot</th>
+                            <th>Sequence Name</th>
+                            <th>Sequence</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sequence-tbody">
+                        <!-- Rows will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+        </form>
+
+        <!-- Plot Container -->
+        <div id="plot"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
