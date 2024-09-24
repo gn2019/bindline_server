@@ -84,42 +84,56 @@ def get_sequences():
 def upload_files():
     print('HERE WE ARE IN UPLOAD PYTHON')
     print(request.files, request.form)
-    if 'e_score' in request.files:
-        e_score_file = request.files['e_score']
-        e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file.filename)
-        e_score_file.save(e_score_path)
+
+    if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
+        # save them (it's a list of files)
+        e_score_files = request.files.getlist('e_score')
+        for e_score_file in e_score_files:
+            e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file.filename)
+            e_score_file.save(e_score_path)
+        # take their names
+        e_score_files = [f.filename for f in e_score_files]
     else:
-        e_score_path = os.path.join(app.config['ESCORE_FOLDER'], request.form['e_score'])
+        e_score_files = [request.form[var] for var in request.form if var.startswith('e_score_')]
 
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
 
-    with open(e_score_path, 'r') as f:
-        if file_type == 'escore':
-            score = bindline.UniProbeEScoreFile(f.read())
-        elif file_type == 'zscore':
-            score = bindline.UniProbeZScoreFile(f.read())
-        elif file_type == 'iscore':
-            score = bindline.UniProbeIScoreFile(f.read())
-        else:
-            raise ValueError("Invalid file type selected.")
-
-    name, motif, table = next(score.parse_tables())
-    scores_dict = table.score_seqs(sequences)
-    max_score = max(table._dict.values())
-
-    ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
-    ref_scores = scores_dict[ref_name][1]
-
     aligned_scores = {}
-    for name, (sequence_str, sequence_scores) in scores_dict.items():
-        aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
+    max_scores = {}
+
+    for e_score_file in e_score_files:
+        e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
+
+        with open(e_score_path, 'r') as f:
+            if file_type == 'escore':
+                score = bindline.UniProbeEScoreFile(f.read())
+            elif file_type == 'zscore':
+                score = bindline.UniProbeZScoreFile(f.read())
+            elif file_type == 'iscore':
+                score = bindline.UniProbeIScoreFile(f.read())
+            else:
+                raise ValueError("Invalid file type selected.")
+
+        name, motif, table = next(score.parse_tables())
+        scores_dict = table.score_seqs(sequences)
+        max_scores[e_score_file] = max(table._dict.values())
+        curr_aligned_scores = {}
+
+        if not curr_aligned_scores:
+            ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
+            ref_scores = scores_dict[ref_name][1]
+
+        for name, (sequence_str, sequence_scores) in scores_dict.items():
+            curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
+
+        aligned_scores[e_score_file] = curr_aligned_scores
 
     plot_data = {
         'aligned_scores': aligned_scores,
         'sequence_names': list(scores_dict.keys()),
         'sequence_str': scores_dict[ref_name][0],
-        'max_score': max_score
+        'max_scores': max_scores
     }
 
     print(plot_data)

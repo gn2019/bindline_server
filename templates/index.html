@@ -15,13 +15,13 @@
         <form id="upload-form">
             <table class="table table-borderless align-middle mb-3">
                 <tr>
-                    <td><label for="e_score" class="form-label mb-0">E-Score File:</label></td>
+                    <td><label for="e_score" class="form-label mb-0">E-Score File(s):</label></td>
                     <td>
-                        <input class="form-control form-control-sm" type="file" id="e_score" name="e_score">
+                        <input class="form-control form-control-sm" type="file" id="e_score" name="e_score" multiple>
                     </td>
                     <td><label for="existing_escore" class="form-label mb-0">Or Existing:</label></td>
                     <td>
-                        <select class="form-select form-select-sm" id="existing_escore"></select>
+                        <select class="form-select form-select-sm" id="existing_escore" multiple size="5"></select>
                     </td>
                 </tr>
                 <tr>
@@ -41,7 +41,6 @@
                 </tr>
             </table>
 
-            <!-- File Type and Upload Button Row -->
             <div class="d-flex align-items-center mb-2">
                 <label class="form-label mb-0 me-2">File Type:</label>
                 <div class="form-check form-check-inline">
@@ -59,13 +58,10 @@
                 <button class="btn btn-success btn-sm ms-2" type="button" id="upload-and-plot">Upload & Plot</button>
             </div>
 
-            <!-- Sequence Table and Buttons Row -->
             <div class="d-flex align-items-center mb-2">
                 <button class="btn btn-secondary btn-sm me-2" type="button" id="add-sequence-row">Add Sequence</button>
-                <button class="btn btn-info btn-sm" type="button" id="add-line">Toggle Max Score Line</button>
             </div>
 
-            <!-- Sequence Table -->
             <div class="form-group mt-2">
                 <table class="table table-bordered table-striped table-sm" id="sequence-table">
                     <thead class="table-light">
@@ -83,7 +79,6 @@
             </div>
         </form>
 
-        <!-- Plot Container -->
         <div id="plot"></div>
     </div>
 

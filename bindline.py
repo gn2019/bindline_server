@@ -713,6 +713,8 @@ def get_seqs_from_fasta(fasta_file):
     seqs = {}
     with open(fasta_file, 'r') as f:
         for line in f:
+            if not line.strip():
+                continue
             if line.startswith('>'):
                 name = line[1:].strip()
                 seqs[name] = ''
