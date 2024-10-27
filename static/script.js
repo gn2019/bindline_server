@@ -1,19 +1,25 @@
-// Load existing E-Score files into dropdown and enable multiple selection
+// Load existing E-Score files into dropdown and enable searchable multi-selection
 function loadExistingFiles() {
     fetch('/list-files/escore')
         .then(response => response.json())
         .then(files => {
-            const escoreDropdown = document.getElementById('existing_escore');
-            escoreDropdown.innerHTML = ''; // Clear previous options
+            const escoreDropdown = $('#existing_escore'); // Use jQuery selector for Select2
+            escoreDropdown.empty(); // Clear previous options
+
+            // Populate options
             files.forEach(file => {
-                const option = document.createElement('option');
-                option.value = file;
-                option.textContent = file;
-                escoreDropdown.appendChild(option);
+                const option = new Option(file, file, false, false);
+                escoreDropdown.append(option);
+            });
+
+            // Initialize Select2 for searchable dropdown
+            escoreDropdown.select2({
+                placeholder: "Select E-Score files",
+                allowClear: true
             });
         });
 
-    fetch('/list-files/fasta')
+	fetch('/list-files/fasta')
         .then(response => response.json())
         .then(files => {
             const fastaDropdown = document.getElementById('existing_fasta');
@@ -172,7 +178,7 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
         const fileColorPalettes = [
             ['#1f77b4', '#aec7e8', '#0e42ff', '#3182bd', '#6baed6', '#9ecae1'], // Palette for File 1
             ['#ff7f0e', '#ffbb78', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2'], // Palette for File 2
-            ['#2ca02c', '#98df8a', '#31a354', '#74c476', '#a1d99b', '#c7e9c0']  // Palette for File 3
+            ['#2ca02c', '#98df8a', '#31a354', '#74c476', '#a1d99b', '#c7e9c0'],  // Palette for File 3
             ['#9467bd', '#c5b0d5', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb'], // Palette for File 4
             ['#d62728', '#ff9896', '#e41a1c', '#fb6a4a', '#fc9272', '#fcbba1'], // Palette for File 5
             ['#8c564b', '#c49c94', '#8b4513', '#a0522d', '#cd853f', '#deb887'], // Palette for File 6
