@@ -22,14 +22,19 @@ if not os.path.exists(app.config['ESCORE_FOLDER']):
     os.makedirs(app.config['ESCORE_FOLDER'])
 
 
+def recursive_dir(path):
+    path = os.path.abspath(path)
+    return [os.path.join(root, file)[len(path)+1:] for root, _, files in os.walk(path) for file in files]
+
+
 # List existing files in the upload directory
 @app.route('/list-files/<filetype>', methods=['GET'])
 def list_files(filetype):
     # fasta files in "fasta" directory, escore files in "escore" directory
     if filetype == 'fasta':
-        files = [f for f in os.listdir(app.config['FASTA_FOLDER'])]
+        files = recursive_dir(app.config['FASTA_FOLDER'])
     elif filetype == 'escore':
-        files = [f for f in os.listdir(app.config['ESCORE_FOLDER'])]
+        files = recursive_dir(app.config['ESCORE_FOLDER'])
     else:
         files = []
     return jsonify(files)
