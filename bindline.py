@@ -673,10 +673,14 @@ def mer8_to_dict(mer8_content, score_type='E'):
     if type(mer8_content) == bytes:
         mer8_content = mer8_content.decode('utf8')
     mer8_content = [i.strip(' \r\n').split('\t') for i in mer8_content.strip(' \r\n').split('\n')]
+    # remove header if exists
+    if set('ACGT') - set(mer8_content[0][0]):
+        mer8_content = mer8_content[1:]
     # determine file format by number of columns
     cols_num = len(mer8_content[0])
     score_column = {
         3: {'E': 2},
+        4: {'E':2, 'I': 3},
         5: {'E': 2, 'I': 3, 'Z': 4},
         9: {'I': 2, 'E': 3, 'Z': 4},
         20: {'I': 2, 'E': 3, 'Z': 4}
@@ -688,8 +692,8 @@ def mer8_to_dict(mer8_content, score_type='E'):
     score_idx = score_column[cols_num][score_type]
     if cols_num == 5:
         mer8_content = mer8_content[1:]
-    mer8_dict = {i[0]: -0.5 if i[score_idx] == '' else float(i[score_idx]) for i in mer8_content}
-    mer8_dict.update({i[1]: -0.5 if i[score_idx] == '' else float(i[score_idx]) for i in mer8_content})
+    mer8_dict = {i[0]: -0.5 if i[score_idx] in ('', 'NA') else float(i[score_idx]) for i in mer8_content}
+    mer8_dict.update({i[1]: -0.5 if i[score_idx] in ('', 'NA') else float(i[score_idx]) for i in mer8_content})
     return mer8_dict
 
 
