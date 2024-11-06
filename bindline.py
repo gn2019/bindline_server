@@ -9,6 +9,7 @@ import seqlogo
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
+import pickle
 
 
 EPS = 0.00001
@@ -726,4 +727,21 @@ def get_seqs_from_fasta(fasta_file):
                 seqs[name] += line.strip()
     return seqs
 
+class TFIdentifier:
+    def __init__(self, hypo_file, _mer=8):
+    
+        with open(hypo_file, 'rb') as file:
+            self._dict = pickle.load(file)
+        self._mer = _mer
+    
+    def identify(self, seq):
 
+        TFs = []
+        # for each position in the sequence
+        for i in range(len(seq) - self._mer + 1):
+            # calculate the score of the motif
+            TFs.append(self._dict.setdefault(seq[i:i + self._mer], []))
+        return TFs
+
+    def __call__(self, seqs):
+        return {name: (seq, self.identify(seq)) for name, seq in seqs.items()}
