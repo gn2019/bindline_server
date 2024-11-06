@@ -84,6 +84,19 @@ def get_sequences():
 
     return jsonify({'sequences': sequences})
 
+def get_score(e_score_path, file_type):
+    with open(e_score_path, 'r') as f:
+        if file_type == 'escore':
+            score = bindline.UniProbeEScoreFile(f.read())
+        elif file_type == 'zscore':
+            score = bindline.UniProbeZScoreFile(f.read())
+        elif file_type == 'iscore':
+            score = bindline.UniProbeIScoreFile(f.read())
+        else:
+            raise ValueError("Invalid file type selected.")
+    
+    return score
+
 
 
 @app.route('/upload', methods=['POST'])
@@ -111,19 +124,10 @@ def upload_files():
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
 
-        with open(e_score_path, 'r') as f:
-            if file_type == 'escore':
-                score = bindline.UniProbeEScoreFile(f.read())
-            elif file_type == 'zscore':
-                score = bindline.UniProbeZScoreFile(f.read())
-            elif file_type == 'iscore':
-                score = bindline.UniProbeIScoreFile(f.read())
-            else:
-                raise ValueError("Invalid file type selected.")
-
+        score = get_score(e_score_path, file_type)
         name, motif, table = next(score.parse_tables())
         scores_dict = table.score_seqs(sequences)
-        identified_TFs = identifier(sequences)
+
         max_scores[e_score_file] = max(table._dict.values())
         curr_aligned_scores = {}
 
@@ -135,6 +139,39 @@ def upload_files():
             curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
 
         aligned_scores[e_score_file] = curr_aligned_scores
+
+        identified_TFs = identifier(sequences)
+
+    # Extract unique file paths of identified TFs
+    identified_unq_files = []
+    for seq_name in identified_TFs:
+
+        # identified_TFs[seq_name] is a tuple where first value is the sequence and the second is the list of lists of file paths
+        pos_nested_ls = identified_TFs[seq_name][1] 
+
+        # For each list of path corresponding to a position
+        for pos_ls in pos_nested_ls:
+            identified_unq_files.extend(pos_ls)
+    identified_unq_files = np.unique(identified_unq_files)
+
+    # Get the tables for each identified file
+    identified_tables = {}
+    for file in identified_unq_files:
+        _, _, identified_tables[file] = next(get_score(file, file_type).parse_tables())
+
+    # Compute the scores for each identified transcription factor (TF) across all sequences.
+    # The dictionary has the following structure:
+    # {
+    #   identified file path 1: {
+    #       seq name 1: (sequence, array of scores),
+    #       seq name 2: (sequence, array of scores)
+    #   },
+    #   identified file path 2: {
+    #       seq name 1: (sequence, array of scores),
+    #       seq name 2: (sequence, array of scores)
+    #   }
+    # }
+    identified_scores = {file : identified_tables[file].score_seqs(sequences) for file in identified_tables}
 
     plot_data = {
         'aligned_scores': aligned_scores,
