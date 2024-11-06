@@ -7,6 +7,7 @@ import sys
 import numpy as np
 
 import bindline
+identifier = bindline.TFIdentifier('uploads/hypo_dict.pkl')
 
 app = Flask(__name__)
 CORS(app)
@@ -122,6 +123,7 @@ def upload_files():
 
         name, motif, table = next(score.parse_tables())
         scores_dict = table.score_seqs(sequences)
+        identified_TFs = identifier(sequences)
         max_scores[e_score_file] = max(table._dict.values())
         curr_aligned_scores = {}
 
@@ -147,4 +149,4 @@ def upload_files():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(host='127.0.0.1', port=80, debug=True)
