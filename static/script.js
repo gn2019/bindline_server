@@ -176,17 +176,17 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
 
         // Define a palette for each file, using distinct colors
         const fileColorPalettes = [
-            ['#1f77b4', '#aec7e8', '#0e42ff', '#3182bd', '#6baed6', '#9ecae1'], // Palette for File 1
-            ['#ff7f0e', '#ffbb78', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2'], // Palette for File 2
-            ['#2ca02c', '#98df8a', '#31a354', '#74c476', '#a1d99b', '#c7e9c0'],  // Palette for File 3
-            ['#9467bd', '#c5b0d5', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb'], // Palette for File 4
-            ['#d62728', '#ff9896', '#e41a1c', '#fb6a4a', '#fc9272', '#fcbba1'], // Palette for File 5
-            ['#8c564b', '#c49c94', '#8b4513', '#a0522d', '#cd853f', '#deb887'], // Palette for File 6
-            ['#e377c2', '#f7b6d2', '#ff69b4', '#ffb6c1', '#f4a582', '#e78ac3'], // Palette for File 7
-            ['#7f7f7f', '#c7c7c7', '#525252', '#969696', '#bdbdbd', '#d9d9d9'], // Palette for File 8
-            // Add more palettes as needed
+            ['#1f77b4', '#aec7e8', '#0e42ff', '#3182bd', '#6baed6', '#9ecae1'],
+            ['#ff7f0e', '#ffbb78', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2'],
+            ['#2ca02c', '#98df8a', '#31a354', '#74c476', '#a1d99b', '#c7e9c0'],
+            ['#9467bd', '#c5b0d5', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb'],
+            ['#d62728', '#ff9896', '#e41a1c', '#fb6a4a', '#fc9272', '#fcbba1'],
+            ['#8c564b', '#c49c94', '#8b4513', '#a0522d', '#cd853f', '#deb887'],
+            ['#e377c2', '#f7b6d2', '#ff69b4', '#ffb6c1', '#f4a582', '#e78ac3'],
+            ['#7f7f7f', '#c7c7c7', '#525252', '#969696', '#bdbdbd', '#d9d9d9'],
         ];
         let fileIndex = 0;
+        let segmentY = 1;  // Initial y-position for stacking
 
         // Loop through each E-Score file and sequence
         for (const [fileName, fileScores] of Object.entries(plotData.aligned_scores)) {
@@ -199,11 +199,75 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
                     x: Array.from({ length: alignedScores.length }, (_, i) => i),
                     y: alignedScores,
                     mode: 'lines',
-                    name: `${seqName} (${fileName})`,  // Include file name in trace label
+                    name: `${seqName} (${fileName})`,
                     type: 'scatter',
-                    line: { color: colorPalette[seqIndex % colorPalette.length] }  // Use distinct color from palette
+                    line: { color: colorPalette[seqIndex % colorPalette.length] }
                 };
                 traces.push(trace);
+
+                // Highlight the highest values
+                const highestVals = plotData.highest_values[fileName]?.[seqName];
+                const sequence_str = plotData.sequence_strs[plotData.ref_name];
+                // k is the difference between the length of alignedScores and sequence_str
+                const k = sequence_str.length - alignedScores.length + 1;
+                const alignedSeq = getAlignedSeq(plotData.sequence_strs[seqName], alignedScores);
+                if (highestVals) {
+                    const highlightTrace = {
+                        x: Array.from({ length: alignedScores.length }, (_, i) => i),
+                        y: highestVals,
+                        mode: 'markers',
+                        showlegend: false,  // Hide max score line from legend
+                        text: alignedScores.map((_, i) => getKmerSeqFromAlignedSeq(alignedSeq, k, i)), // Tooltip showing sequence segment, TODO: 8 is hardcoded
+                        hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
+                        marker: { color: colorPalette[seqIndex % colorPalette.length], size: 10, symbol: 'circle' }
+                    };
+                    traces.push(highlightTrace);
+                }
+
+                // Add short horizontal lines for non-None values in highest_values
+                const highestValuesExp = plotData.highest_values[fileName];
+
+                let highestValues = highestValuesExp?.[seqName];
+                // get not null indexes
+                const highestValuesIdx = highestValues.map((value, index) => value !== null ? index : null).filter(index => index !== null);
+                const groupedRanges = splitRanges(highestValuesIdx, k);
+                groupedRanges.forEach(group => {
+                    group.forEach(index => {
+                        const [kmerSeq, kmerLength] = getKmerFromAlignedSeq(alignedSeq, k, index);
+                        const highestValueSegment = {
+                            x: [index - 0.25, index + kmerLength - 0.75],
+                            y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
+                            mode: 'lines',
+                            line: { color: colorPalette[seqIndex % colorPalette.length], width: 20 },
+                            showlegend: true,
+                            name: `Binding Site ${index}-${index + kmerLength - 1} ${seqName} (${fileName})`,
+                            // hover all the sequence in the segment
+                            text: Array.from({ length: k }, (_, i) => kmerSeq
+                                + " (" + index.toString() + "-" + (index + kmerLength - 1).toString() + ")"), // Tooltip showing sequence segment
+                            hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
+                            visible: false  // Start hidden for toggle functionality
+                        };
+                        traces.push(highestValueSegment);
+                        // wherever the aligned seq is '-' add a gap
+                        alignedSeq.split('').forEach((char, i) => {
+                            if (char === '-' && i >= index && i < index + kmerLength) {
+                                const gap = {
+                                    x: [i - 0.25, i + 0.25],
+                                    y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
+                                    mode: 'lines',
+                                    line: { color: 'black', width: 10 },
+                                    name: `Binding Site ${index} Gap ${seqName} (${fileName})`,
+                                    hovertemplate: "<extra></extra>",  // Customize hover tooltip
+                                    showlegend: false,
+                                    visible: false  // Start hidden for toggle functionality
+                                };
+                                traces.push(gap);
+                            }
+                        });
+                    });
+                    segmentY += 1;
+                });
+                segmentY += 2;  // Add padding between sequences
                 seqIndex++;
             }
 
@@ -223,7 +287,6 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
 
         // Plot all traces
         Plotly.newPlot(plotDiv, traces, {
-            // title: 'Sequence Alignment Scores',
             xaxis: {
                 title: 'Position'
             },
@@ -233,31 +296,10 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
             showlegend: true
         });
 
+        plotDiv.sequence_str = plotData.sequence_strs[plotData.ref_name];
+
         // Zoom event handling
-        const set_x_ticks = function(eventData) {
-            const xStart = eventData == null ? 0 : Math.ceil(eventData['xaxis.range[0]']);
-            const xRange = eventData == null ? plotData.sequence_str.length : eventData['xaxis.range[1]'] - eventData['xaxis.range[0]'] + 1;
-            if (xRange < 200) {
-                const annotations = [];
-                const sequence = plotData.sequence_str.substring(xStart, xStart + xRange);
-                for (let i = 0; i < xRange; i++) {
-                    annotations.push({
-                        x: xStart + i,
-                        y: -0.15,
-                        xref: 'x',
-                        yref: 'paper',
-                        text: sequence[i],
-                        showarrow: false,
-                        font: {
-                            family: 'Courier New, monospace',
-                            size: 16,
-                            color: 'black'
-                        }
-                    });
-                }
-                Plotly.relayout(plotDiv, { annotations: annotations });
-            }
-        }
+        const set_x_ticks = eventData => set_x_ticks_inner(eventData, plotDiv);
 
         plotDiv.on('plotly_relayout', set_x_ticks);
         plotDiv.on('plotly_doubleclick', set_x_ticks);
@@ -284,3 +326,141 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
 document.getElementById('add-sequence-row').addEventListener('click', () => {
     addSequenceRow();
 });
+
+// Add button event listener
+document.getElementById('toggleViewButton').addEventListener('click', () => {
+    const plotDiv = document.getElementById('plot');
+    const traces = plotDiv.data;
+    const showHighestOnly = traces.some(trace => trace.visible === true && trace.name && trace.name.startsWith('Binding Site'));
+
+    traces.forEach(trace => {
+        if (trace.name && trace.name.startsWith('Binding Site')) {
+            trace.visible = !showHighestOnly;  // Toggle visibility of highest values
+        } else {
+            trace.visible = showHighestOnly;  // Toggle visibility of scores
+        }
+    });
+    // Capture the current x-axis range before updating
+    const currentXRange = Plotly.d3.select('#plot').node().layout.xaxis.range;
+    const visibleYValues = [];
+    traces.forEach(trace => {
+        if (trace.visible) {
+            trace.x.forEach((xValue, index) => {
+                if (xValue >= currentXRange[0] && xValue <= currentXRange[1]) {
+                    visibleYValues.push(trace.y[index]);
+                }
+            });
+        }
+    });
+    // Calculate the min and max of visible y-values to set y-axis range
+    const minY = Math.min(...visibleYValues);
+    const maxY = Math.max(...visibleYValues);
+
+    // Update the plot with the same x-axis range
+    Plotly.react(plotDiv, traces, {
+        xaxis: { title: 'Position', range: currentXRange },  // Use the current x-axis range
+        yaxis: { visible: showHighestOnly, range: showHighestOnly ? [] : [minY - 1, maxY + 1] }
+    });
+    set_x_ticks_inner(null, plotDiv);
+
+});
+
+function set_x_ticks_inner(eventData, plotDiv) {
+    const xStart = eventData == null ? 0 : Math.ceil(eventData['xaxis.range[0]']);
+    const xRange = eventData == null ? plotDiv.sequence_str.length : eventData['xaxis.range[1]'] - eventData['xaxis.range[0]'] + 1;
+    if (xRange < 200) {
+        const annotations = [];
+        const sequence = plotDiv.sequence_str.substring(xStart, xStart + xRange);
+        for (let i = 0; i < xRange; i++) {
+            annotations.push({
+                x: xStart + i,
+                y: -0.15,
+                xref: 'x',
+                yref: 'paper',
+                text: sequence[i],
+                showarrow: false,
+                font: {
+                    family: 'Courier New, monospace',
+                    size: 16,
+                    color: 'black'
+                }
+            });
+        }
+        Plotly.relayout(plotDiv, {annotations: annotations});
+    }
+}
+
+function splitRanges(indices, k) {
+    // Convert indices to ranges (i.e., (index, index + k - 1)) along with the left limit (index)
+    const ranges = indices.map(index => [index, index + k - 1]);
+
+    // Sort ranges by their starting value
+    ranges.sort((a, b) => a[0] - b[0]);
+
+    // Initialize groups array
+    let groups = [];
+
+    // Iterate through each range and place it in the first non-colliding group
+    ranges.forEach(range => {
+        let placed = false;
+        for (let group of groups) {
+            // Check if the range collides with any range in the current group
+            const collides = group.some(existingRange =>
+                (range[0] <= existingRange[1] && range[1] >= existingRange[0])
+            );
+            if (!collides) {
+                group.push(range);
+                placed = true;
+                break;
+            }
+        }
+
+        // If no group is found, create a new group
+        if (!placed) {
+            groups.push([range]);
+        }
+    });
+
+    // Include the left limit (start index) in each group
+    return groups.map(group => group.map(range => range[0]));
+}
+
+function getAlignedSeq(seq, aligned_scores) {
+    let cur = seq.length - aligned_scores.length + 1;
+    let aligned_seq = seq.substring(0, cur);
+    for (let i = 0; i < aligned_scores.length; i++) {
+        if (aligned_scores[i] !== null) {
+            aligned_seq += seq[cur];
+            cur++;
+        } else {
+            aligned_seq += '-';
+        }
+    }
+    return aligned_seq;
+}
+
+function getKmerFromAlignedSeq(aligned_seq, k, start = 0) {
+    // get substring of length k from aligned_seq, without any gaps
+    let kmer = '';
+    let length = 0;
+    let count = 0;
+    for (let i = start; i < aligned_seq.length; i++) {
+        length++;
+        if (aligned_seq[i] !== '-') {
+            kmer += aligned_seq[i];
+            count++;
+            if (count === k) {
+            break;
+            }
+        }
+    }
+    return [kmer, length];
+}
+
+function getKmerSeqFromAlignedSeq(aligned_seq, k, start = 0) {
+    return getKmerFromAlignedSeq(aligned_seq, k, start)[0];
+}
+
+function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
+    return getKmerFromAlignedSeq(aligned_seq, k, start)[1];
+}
