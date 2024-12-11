@@ -45,6 +45,7 @@ def align_sequences(ref_scores, scores):
     aligned_scores = list(scores[:min_i]) + [None] * del_size + list(scores[min_i:])
     return aligned_scores
 
+
 def align_sequences(ref_seq, seq, scores):
     # align by bioinformatics
     from Bio import pairwise2
@@ -53,12 +54,9 @@ def align_sequences(ref_seq, seq, scores):
     aligned_scores = []
     j = 0
     print(alignments)
-    for i in range(len(alignments[0][1])):
-        if alignments[0][1][i] == '-':
-            aligned_scores.append(None)
-        else:
-            aligned_scores.append(scores[j])
-            j += 1
+    for i in range(len(scores) + len(ref_seq) - len(seq)):
+        aligned_scores.append(None if alignments[0][1][i] == '-' else scores[j])
+        j += int(alignments[0][1][i] != '-')
     return aligned_scores
 
 
