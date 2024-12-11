@@ -7,7 +7,6 @@ import sys
 import numpy as np
 
 import bindline
-identifier = bindline.TFIdentifier('uploads/hypo_dict.pkl')
 
 app = Flask(__name__)
 CORS(app)
@@ -15,12 +14,11 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['FASTA_FOLDER'] = os.path.join(app.config['UPLOAD_FOLDER'], 'fasta')
 app.config['ESCORE_FOLDER'] = os.path.join(app.config['UPLOAD_FOLDER'], 'escore')
 
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
-if not os.path.exists(app.config['FASTA_FOLDER']):
-    os.makedirs(app.config['FASTA_FOLDER'])
-if not os.path.exists(app.config['ESCORE_FOLDER']):
-    os.makedirs(app.config['ESCORE_FOLDER'])
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['FASTA_FOLDER'], exist_ok=True)
+os.makedirs(app.config['ESCORE_FOLDER'], exist_ok=True)
+
+identifier = bindline.TFIdentifier(os.path.join(app.config['UPLOAD_FOLDER'], 'main_dict.pkl'))
 
 
 def recursive_dir(path):
@@ -47,16 +45,26 @@ def align_sequences(ref_scores, scores):
     aligned_scores = list(scores[:min_i]) + [None] * del_size + list(scores[min_i:])
     return aligned_scores
 
+def align_sequences(ref_seq, seq, scores):
+    # align by bioinformatics
+    from Bio import pairwise2
+    alignments = pairwise2.align.globalms(ref_seq, seq, 2, -1, -0.5, -0.1)  # match, mismatch, open gap, extend gap
+    # return the scores with gaps in the same positions
+    aligned_scores = []
+    j = 0
+    print(alignments)
+    for i in range(len(alignments[0][1])):
+        if alignments[0][1][i] == '-':
+            aligned_scores.append(None)
+        else:
+            aligned_scores.append(scores[j])
+            j += 1
+    return aligned_scores
+
 
 @app.route('/')
 def index():
     return render_template('index.html')
-
-
-@app.route('/existing_fasta_files', methods=['GET'])
-def existing_fasta_files():
-    fasta_files = [f for f in os.listdir(app.config['FASTA_FOLDER'])]
-    return jsonify({'files': fasta_files})
 
 
 @app.route('/sequences', methods=['POST'])
@@ -84,7 +92,7 @@ def get_sequences():
 
     return jsonify({'sequences': sequences})
 
-def get_score(e_score_path, file_type):
+def get_score_file(e_score_path, file_type):
     with open(e_score_path, 'r') as f:
         if file_type == 'escore':
             score = bindline.UniProbeEScoreFile(f.read())
@@ -94,15 +102,86 @@ def get_score(e_score_path, file_type):
             score = bindline.UniProbeIScoreFile(f.read())
         else:
             raise ValueError("Invalid file type selected.")
-    
     return score
 
+@app.route('/find-binding-sites', methods=['GET'])
+def find_binding_sites():
+    file_type = request.form['file_type']
+    sequences = json.loads(request.form.get('sequences'))
+
+    identified_TFs = identifier(sequences)
+
+    # Extract unique file paths of identified TFs
+    identified_unq_files = []
+    for seq_name in identified_TFs:
+
+        # identified_TFs[seq_name] is a tuple where first value is the sequence and the second is the list of lists of file paths
+        pos_nested_ls = identified_TFs[seq_name][1]
+
+        # For each list of path corresponding to a position
+        for pos_ls in pos_nested_ls:
+            identified_unq_files.extend(pos_ls)
+    identified_unq_files = np.unique(identified_unq_files)
+
+    # Get the tables for each identified file
+    identified_tables = {}
+    identified_binding_sites = {}
+    for file in identified_unq_files:
+        _, _, identified_tables[file] = next(get_score_file(file, file_type).parse_tables())
+        score = identified_tables[file].score_seqs(sequences)
+
+        identified_binding_sites[file] = {}
+        for seq_name in identified_TFs:
+            curr_bs = [score[seq_name][1][i] if file in pos_ls else np.nan
+                       for i, pos_ls in enumerate(identified_TFs[seq_name][1])]
+            identified_binding_sites[file][seq_name] = curr_bs
+
+    # Compute the scores for each identified transcription factor (TF) across all sequences.
+    # The dictionary has the following structure:
+    # {
+    #   identified file path 1: {
+    #       seq name 1: (sequence, array of scores),
+    #       seq name 2: (sequence, array of scores)
+    #   },
+    #   identified file path 2: {
+    #       seq name 1: (sequence, array of scores),
+    #       seq name 2: (sequence, array of scores)
+    #   }
+    # }
+    max_scores = {}
+
+    identified_scores = {}
+    for e_score_file, table in identified_tables.items():
+        scores_dict = table.score_seqs(sequences)
+        max_scores[e_score_file] = max(table._dict.values())
+        curr_aligned_scores = {}
+        ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
+        ref_seq, ref_scores = scores_dict[ref_name]
+
+        for name, (sequence_str, sequence_scores) in scores_dict.items():
+            # curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
+            curr_aligned_scores[name] = align_sequences(ref_seq, sequence_str, sequence_scores)
+
+        identified_scores[e_score_file] = curr_aligned_scores
+
+    plot_data = {
+        'aligned_scores': identified_scores,
+        'highest_values': identified_binding_sites,
+        'sequence_names': list(scores_dict.keys()),
+        'sequence_strs': {k: v[0] for k,v in scores_dict.items()},
+        'ref_name': ref_name,
+        'max_scores': max_scores
+    }
+
+    print(plot_data)
+
+    return jsonify  (plot_data, allow_nan=False)
 
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    print('HERE WE ARE IN UPLOAD PYTHON')
-    print(request.files, request.form)
+    if request.form['search_binding_sites']:
+        return find_binding_sites()
 
     if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
         # save them (it's a list of files)
@@ -119,68 +198,44 @@ def upload_files():
     sequences = json.loads(request.form.get('sequences'))
 
     aligned_scores = {}
+    highest_values = {}
     max_scores = {}
 
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
 
-        score = get_score(e_score_path, file_type)
+        score = get_score_file(e_score_path, file_type)
         name, motif, table = next(score.parse_tables())
         scores_dict = table.score_seqs(sequences)
 
         max_scores[e_score_file] = max(table._dict.values())
         curr_aligned_scores = {}
-
-        if not curr_aligned_scores:
-            ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
-            ref_scores = scores_dict[ref_name][1]
+        ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
+        ref_scores = scores_dict[ref_name][1]
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
 
         aligned_scores[e_score_file] = curr_aligned_scores
 
-        identified_TFs = identifier(sequences)
-
-    # Extract unique file paths of identified TFs
-    identified_unq_files = []
-    for seq_name in identified_TFs:
-
-        # identified_TFs[seq_name] is a tuple where first value is the sequence and the second is the list of lists of file paths
-        pos_nested_ls = identified_TFs[seq_name][1] 
-
-        # For each list of path corresponding to a position
-        for pos_ls in pos_nested_ls:
-            identified_unq_files.extend(pos_ls)
-    identified_unq_files = np.unique(identified_unq_files)
-
-    # Get the tables for each identified file
-    identified_tables = {}
-    for file in identified_unq_files:
-        _, _, identified_tables[file] = next(get_score(file, file_type).parse_tables())
-
-    # Compute the scores for each identified transcription factor (TF) across all sequences.
-    # The dictionary has the following structure:
-    # {
-    #   identified file path 1: {
-    #       seq name 1: (sequence, array of scores),
-    #       seq name 2: (sequence, array of scores)
-    #   },
-    #   identified file path 2: {
-    #       seq name 1: (sequence, array of scores),
-    #       seq name 2: (sequence, array of scores)
-    #   }
-    # }
-    identified_scores = {file : identified_tables[file].score_seqs(sequences) for file in identified_tables}
+        # highest_values is for each aligned_scores the same list but all None except the top 10%
+        curr_highest_values = {}
+        for name, scores in aligned_scores[e_score_file].items():
+            # sort the not None values and get the threshold value
+            sorted_scores = sorted([score for score in scores if score is not None])
+            threshold = sorted_scores[int(len(sorted_scores) * 0.95)]
+            curr_highest_values[name] = [score if score is not None and score >= threshold else None for score in scores]
+        highest_values[e_score_file] = curr_highest_values
+        highest_values[e_score_file] = {}  # TODO
 
     plot_data = {
         'aligned_scores': aligned_scores,
+        'highest_values': highest_values,
         'sequence_names': list(scores_dict.keys()),
-        'sequence_str': scores_dict[ref_name][0],
+        'sequence_strs': {k: v[0] for k,v in scores_dict.items()},
+        'ref_name': ref_name,
         'max_scores': max_scores
     }
-
-    print(plot_data)
 
     return jsonify(plot_data)
 

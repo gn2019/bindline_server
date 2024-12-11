@@ -26,6 +26,13 @@
                     <td>
 			<select id="existing_escore" multiple="multiple" style="width: 100%;" class="form-select form-select-sm" size="5"></select>
                     </td>
+                    <td>
+                        <!-- checkbox for searching binding sites -->
+                        <div class="form-check form-check-inline">
+                            <input class="form-check input" type="checkbox" id="search-binding-sites" name="search-binding-sites">
+                            <label class="form-check label" for="search-binding-sites">Search Binding Sites</label>
+                        </div>
+                    </td>
                 </tr>
                 <tr>
                     <td><label for="fasta" class="form-label mb-0">FASTA File:</label></td>
@@ -59,7 +66,7 @@
                     <label class="form-check-label" for="iscore">I-Score</label>
                 </div>
                 <button class="btn btn-success btn-sm ms-2" type="button" id="upload-and-plot">Upload & Plot</button>
-                <button class="btn btn-success btn-sm ms-2" type="button" id="toggleViewButton">Toggle Highest Values</button>
+                <button class="btn btn-success btn-sm ms-2" type="button" id="toggle-view">Toggle Highest Values</button>
             </div>
 
             <div class="d-flex align-items-center mb-2">

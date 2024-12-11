@@ -8,8 +8,7 @@ function loadExistingFiles() {
 
             // Populate options
             files.forEach(file => {
-                const option = new Option(file, file, false, false);
-                escoreDropdown.append(option);
+                escoreDropdown.append(new Option(file, file, false, false));
             });
 
             // Initialize Select2 for searchable dropdown
@@ -25,16 +24,10 @@ function loadExistingFiles() {
             const fastaDropdown = document.getElementById('existing_fasta');
             fastaDropdown.innerHTML = ''; // Clear previous options
             files.forEach(file => {
-                const option = document.createElement('option');
-                option.value = file;
-                option.textContent = file;
-                fastaDropdown.appendChild(option);
+                fastaDropdown.append(new Option(file, file, false, false));
             });
         });
 }
-
-// Call this function on page load to initialize file lists
-loadExistingFiles();
 
 function loadSequences() {
     const fastaFile = document.getElementById('fasta').files[0];
@@ -72,8 +65,6 @@ function loadSequences() {
         console.error('Error:', error);
     });
 }
-
-document.getElementById('load-sequences').addEventListener('click', loadSequences);
 
 // Add a new row to the table with optional name and sequence values
 function addSequenceRow(name = '', sequence = '') {
@@ -120,8 +111,7 @@ function addSequenceRow(name = '', sequence = '') {
     sequenceTbody.appendChild(row);
 }
 
-// Handle uploading and plotting data from multiple E-Score files
-document.getElementById('upload-and-plot').addEventListener('click', () => {
+function uploadAndPlot() {
     const formData = new FormData(document.getElementById('upload-form'));
     const selectedSequences = {};
 
@@ -130,8 +120,7 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
         const plotCheckbox = row.querySelector('input[type="checkbox"]');
         if (plotCheckbox.checked) {
             const name = row.cells[1].querySelector('input').value;
-            const sequence = row.cells[2].querySelector('textarea').value;
-            selectedSequences[name] = sequence;
+            selectedSequences[name] = row.cells[2].querySelector('textarea').value;
         }
     });
 
@@ -143,19 +132,24 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
     // Append selected sequences as JSON
     formData.append('sequences', JSON.stringify(selectedSequences));
 
-    // Gather and append all selected E-Score files
-    const existingEscoreSelect = document.getElementById('existing_escore');
-    const selectedEscoreFiles = Array.from(existingEscoreSelect.selectedOptions);
-    const escoreFile = document.getElementById('e_score').files[0];
-    if (!escoreFile && selectedEscoreFiles.length === 0) {
-        alert("Please select at least one E-Score file.");
-        return;
-    }
+    // if checkbox is checked, don't use E-Score files
+    const searchBindingSites = document.getElementById('search-binding-sites').checked;
+    formData.append('search_binding_sites', searchBindingSites);
+    if (!searchBindingSites) {
+        // Gather and append all selected E-Score files
+        const existingEscoreSelect = document.getElementById('existing_escore');
+        const selectedEscoreFiles = Array.from(existingEscoreSelect.selectedOptions);
+        const escoreFile = document.getElementById('e_score').files[0];
+        if (!escoreFile && selectedEscoreFiles.length === 0) {
+            alert("Please select at least one E-Score file.");
+            return;
+        }
 
-    selectedEscoreFiles.forEach((option, index) => {
-        const file = option.value;
-        formData.append(`e_score_${index}`, file);
-    });
+        selectedEscoreFiles.forEach((option, index) => {
+            const file = option.value;
+            formData.append(`e_score_${index}`, file);
+        });
+    }
 
     // Fetch call to upload files and plot data
     fetch('/upload', {
@@ -319,16 +313,13 @@ document.getElementById('upload-and-plot').addEventListener('click', () => {
         set_x_ticks(null);
     })
     .catch(error => {
+        //log stacktrace
+        console.log(error);
         console.error('Error:', error);
     });
-});
+}
 
-document.getElementById('add-sequence-row').addEventListener('click', () => {
-    addSequenceRow();
-});
-
-// Add button event listener
-document.getElementById('toggleViewButton').addEventListener('click', () => {
+function toggleView() {
     const plotDiv = document.getElementById('plot');
     const traces = plotDiv.data;
     const showHighestOnly = traces.some(trace => trace.visible === true && trace.name && trace.name.startsWith('Binding Site'));
@@ -362,8 +353,7 @@ document.getElementById('toggleViewButton').addEventListener('click', () => {
         yaxis: { visible: showHighestOnly, range: showHighestOnly ? [] : [minY - 1, maxY + 1] }
     });
     set_x_ticks_inner(null, plotDiv);
-
-});
+}
 
 function set_x_ticks_inner(eventData, plotDiv) {
     const xStart = eventData == null ? 0 : Math.ceil(eventData['xaxis.range[0]']);
@@ -464,3 +454,11 @@ function getKmerSeqFromAlignedSeq(aligned_seq, k, start = 0) {
 function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
     return getKmerFromAlignedSeq(aligned_seq, k, start)[1];
 }
+
+// Call this function on page load to initialize file lists
+loadExistingFiles();
+document.getElementById('load-sequences').addEventListener('click', () => loadSequences());
+document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow());
+document.getElementById('toggle-view').addEventListener('click', () => toggleView());
+// Handle uploading and plotting data from multiple E-Score files
+document.getElementById('upload-and-plot').addEventListener('click', () => uploadAndPlot());

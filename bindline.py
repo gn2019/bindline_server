@@ -331,7 +331,7 @@ class EScoreTable(ResultTable):
         # for each position in the sequence
         for i in range(scores.shape[0]):
             # calculate the score of the motif
-            scores[i] = self._dict[seq[i:i + self._mer]]
+            scores[i] = self._dict.get(seq[i:i + self._mer], None)  # TODO: None?
         return scores
 
 
@@ -681,7 +681,7 @@ def mer8_to_dict(mer8_content, score_type='E'):
     cols_num = len(mer8_content[0])
     score_column = {
         3: {'E': 2},
-        4: {'E':2, 'I': 3},
+        4: {'I': 2, 'E': 3},
         5: {'E': 2, 'I': 3, 'Z': 4},
         9: {'I': 2, 'E': 3, 'Z': 4},
         20: {'I': 2, 'E': 3, 'Z': 4}
@@ -728,14 +728,12 @@ def get_seqs_from_fasta(fasta_file):
     return seqs
 
 class TFIdentifier:
-    def __init__(self, hypo_file, _mer=8):
-    
+    def __init__(self, hypo_file, kmer=8):
         with open(hypo_file, 'rb') as file:
             self._dict = pickle.load(file)
-        self._mer = _mer
+        self._mer = kmer or len(next(iter(self._dict)))
     
     def identify(self, seq):
-
         TFs = []
         # for each position in the sequence
         for i in range(len(seq) - self._mer + 1):
