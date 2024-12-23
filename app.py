@@ -1,7 +1,10 @@
 import json
+import functools
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS
+from Bio.Align import PairwiseAligner
+import json
 import os
 import sys
 import numpy as np
@@ -45,19 +48,29 @@ def align_sequences(ref_scores, scores):
     aligned_scores = list(scores[:min_i]) + [None] * del_size + list(scores[min_i:])
     return aligned_scores
 
+@functools.lru_cache(maxsize=128)
+def align_sequences(ref_seq, seq):
+    aligner = PairwiseAligner()
+    aligner.match_score = 2
+    aligner.mismatch_score = -1
+    aligner.target_open_gap_score = -1e6  # Extremely high penalty for opening gaps in the reference
+    aligner.target_extend_gap_score = -1e6  # Extremely high penalty for extending gaps in the reference
+    aligner.query_open_gap_score = -0.5
+    aligner.query_extend_gap_score = -0.1
+    alignments = aligner.align(ref_seq, seq)
+    return alignments[0][1]
 
-def align_sequences(ref_seq, seq, scores):
-    # align by bioinformatics
-    from Bio import pairwise2
-    alignments = pairwise2.align.globalms(ref_seq, seq, 2, -1, -0.5, -0.1)  # match, mismatch, open gap, extend gap
+
+def align_scores(ref_seq, seq, scores):
+    aligned_seq = align_sequences(ref_seq, seq)
     # return the scores with gaps in the same positions
     aligned_scores = []
     j = 0
-    print(alignments)
     for i in range(len(scores) + len(ref_seq) - len(seq)):
-        aligned_scores.append(None if alignments[0][1][i] == '-' else scores[j])
-        j += int(alignments[0][1][i] != '-')
-    return aligned_scores
+        is_gap = aligned_seq[i] == '-'
+        aligned_scores.append(None if is_gap or j >= len(scores) else scores[j])
+        j += int(not is_gap)
+    return aligned_seq, aligned_scores
 
 
 @app.route('/')
@@ -113,7 +126,8 @@ def find_binding_sites():
     identified_unq_files = []
     for seq_name in identified_TFs:
 
-        # identified_TFs[seq_name] is a tuple where first value is the sequence and the second is the list of lists of file paths
+        # identified_TFs[seq_name] is a tuple where first value is the sequence
+        # and the second is the list of lists of file paths
         pos_nested_ls = identified_TFs[seq_name][1]
 
         # For each list of path corresponding to a position
@@ -125,12 +139,13 @@ def find_binding_sites():
     identified_tables = {}
     identified_binding_sites = {}
     for file in identified_unq_files:
-        _, _, identified_tables[file] = next(get_score_file(file, file_type).parse_tables())
+        file_path = os.path.join(app.config['ESCORE_FOLDER'], file)
+        _, _, identified_tables[file] = next(get_score_file(file_path, file_type).parse_tables())
         score = identified_tables[file].score_seqs(sequences)
 
         identified_binding_sites[file] = {}
         for seq_name in identified_TFs:
-            curr_bs = [score[seq_name][1][i] if file in pos_ls else np.nan
+            curr_bs = [score[seq_name][1][i] if file in pos_ls else None
                        for i, pos_ls in enumerate(identified_TFs[seq_name][1])]
             identified_binding_sites[file][seq_name] = curr_bs
 
@@ -147,8 +162,8 @@ def find_binding_sites():
     #   }
     # }
     max_scores = {}
-
     identified_scores = {}
+    binding_sites, gaps = {}, {}
     for e_score_file, table in identified_tables.items():
         scores_dict = table.score_seqs(sequences)
         max_scores[e_score_file] = max(table._dict.values())
@@ -156,11 +171,16 @@ def find_binding_sites():
         ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
         ref_seq, ref_scores = scores_dict[ref_name]
 
+        curr_binding_sites, curr_gaps = {}, {}
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             # curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
-            curr_aligned_scores[name] = align_sequences(ref_seq, sequence_str, sequence_scores)
+            aligned_seq, aligned_scores = align_scores(ref_seq, sequence_str, sequence_scores)
+            curr_aligned_scores[name] = aligned_scores
+            curr_binding_sites[name], curr_gaps[name] = get_binding_sites(identified_binding_sites[e_score_file][name],
+                                                                          aligned_seq, table._mer)
 
         identified_scores[e_score_file] = curr_aligned_scores
+        binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
 
     plot_data = {
         'aligned_scores': identified_scores,
@@ -168,17 +188,22 @@ def find_binding_sites():
         'sequence_names': list(scores_dict.keys()),
         'sequence_strs': {k: v[0] for k,v in scores_dict.items()},
         'ref_name': ref_name,
-        'max_scores': max_scores
+        'max_scores': max_scores,
+        'binding_sites': binding_sites,
+        'gaps': gaps
     }
 
     print(plot_data)
 
-    return jsonify  (plot_data, allow_nan=False)
+    return Response(
+        json.dumps(plot_data, allow_nan=False),
+        mimetype='application/json'
+    )
 
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    if request.form['search_binding_sites']:
+    if request.form['search_binding_sites'] == 'true':
         return find_binding_sites()
 
     if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
@@ -198,6 +223,8 @@ def upload_files():
     aligned_scores = {}
     highest_values = {}
     max_scores = {}
+    binding_sites = {}
+    gaps = {}
 
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
@@ -209,10 +236,10 @@ def upload_files():
         max_scores[e_score_file] = max(table._dict.values())
         curr_aligned_scores = {}
         ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
-        ref_scores = scores_dict[ref_name][1]
+        ref_seq, ref_scores = scores_dict[ref_name]
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
-            curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
+            aligned_seq, curr_aligned_scores[name] = align_scores(ref_seq, sequence_str, sequence_scores)
 
         aligned_scores[e_score_file] = curr_aligned_scores
 
@@ -224,7 +251,13 @@ def upload_files():
             threshold = sorted_scores[int(len(sorted_scores) * 0.95)]
             curr_highest_values[name] = [score if score is not None and score >= threshold else None for score in scores]
         highest_values[e_score_file] = curr_highest_values
-        highest_values[e_score_file] = {}  # TODO
+        # highest_values[e_score_file] = {}  # TODO
+
+        curr_binding_sites, curr_gaps = {}, {}
+        for name, scores in aligned_scores[e_score_file].items():
+            curr_binding_sites[name], curr_gaps[name] = get_binding_sites(
+                curr_highest_values[name], align_sequences(ref_seq, sequences[name]), table._mer)
+        binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
 
     plot_data = {
         'aligned_scores': aligned_scores,
@@ -232,10 +265,39 @@ def upload_files():
         'sequence_names': list(scores_dict.keys()),
         'sequence_strs': {k: v[0] for k,v in scores_dict.items()},
         'ref_name': ref_name,
-        'max_scores': max_scores
+        'max_scores': max_scores,
+        'binding_sites': binding_sites,
+        'gaps': gaps
     }
 
     return jsonify(plot_data)
+
+
+def get_binding_sites(highest_values, seq, mer):
+    # indices of the not None values in curr_highest_values[name], by numpy
+    bs = [i for i, value in enumerate(highest_values) if value is not None]
+    # for each binding site, get the start and end indices
+    # if there's a gap inside, calculate it
+    # if there are multiple binding sites in a row, merge them
+    curr_binding_sites = []
+    curr_gaps = []
+    for i in range(len(bs)):
+        if i == 0 or bs[i] - bs[i - 1] > 1:
+            start = bs[i]
+        if i == len(bs) - 1 or bs[i + 1] - bs[i] > 1:
+            end = bs[i]
+            # count (table._mer - 1) non-gaps after the end
+            remain = mer - 1
+            for c in seq[end + 1:]:
+                end += 1
+                if c != '-':
+                    remain -= 1
+                    if remain == 0:
+                        break
+            curr_binding_sites.append((start, end, seq[start:end + 1]))
+            # add to curr_gaps all the '-' indices inside (start, end) intervals
+            curr_gaps += [i for i in range(start, end + 1) if seq[i] == '-']
+    return curr_binding_sites, curr_gaps
 
 
 if __name__ == '__main__':

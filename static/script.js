@@ -218,51 +218,90 @@ function uploadAndPlot() {
                     traces.push(highlightTrace);
                 }
 
-                // Add short horizontal lines for non-None values in highest_values
-                const highestValuesExp = plotData.highest_values[fileName];
-
-                let highestValues = highestValuesExp?.[seqName];
-                // get not null indexes
-                const highestValuesIdx = highestValues.map((value, index) => value !== null ? index : null).filter(index => index !== null);
-                const groupedRanges = splitRanges(highestValuesIdx, k);
+                // // Add short horizontal lines for non-None values in highest_values
+                // const highestValuesExp = plotData.highest_values[fileName];
+                // console.log(highestValuesExp)
+                //
+                // let highestValues = highestValuesExp?.[seqName];
+                // // get not null indexes
+                // const highestValuesIdx = highestValues.map((value, index) => value !== null ? index : null).filter(index => index !== null);
+                // const groupedRanges = splitRanges(highestValuesIdx, k);
+                const bindingSites = plotData.binding_sites[fileName]?.[seqName];
+                const groupedRanges = splitRanges(bindingSites);
                 groupedRanges.forEach(group => {
-                    group.forEach(index => {
-                        const [kmerSeq, kmerLength] = getKmerFromAlignedSeq(alignedSeq, k, index);
-                        const highestValueSegment = {
-                            x: [index - 0.25, index + kmerLength - 0.75],
+                    group.forEach(range => {
+                        //const [kmerSeq, kmerLength] = getKmerFromAlignedSeq(alignedSeq, k, index);
+                        const [start, end, seq] = range;
+                        const bindingSite = {
+                            x: [start, end],
                             y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
                             mode: 'lines',
-                            line: { color: colorPalette[seqIndex % colorPalette.length], width: 20 },
+                            line: {color: colorPalette[seqIndex % colorPalette.length], width: 20},
                             showlegend: true,
-                            name: `Binding Site ${index}-${index + kmerLength - 1} ${seqName} (${fileName})`,
-                            // hover all the sequence in the segment
-                            text: Array.from({ length: k }, (_, i) => kmerSeq
-                                + " (" + index.toString() + "-" + (index + kmerLength - 1).toString() + ")"), // Tooltip showing sequence segment
-                            hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
+                            name: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
+                            legendgroup: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
+                            // sequence in the segment, substring of the aligned sequence from start to end
+                            hovertemplate: `${seq} (${start}-${end})<extra></extra>`,  // Customize hover tooltip
                             visible: false  // Start hidden for toggle functionality
                         };
-                        traces.push(highestValueSegment);
-                        // wherever the aligned seq is '-' add a gap
-                        alignedSeq.split('').forEach((char, i) => {
-                            if (char === '-' && i >= index && i < index + kmerLength) {
-                                const gap = {
-                                    x: [i - 0.25, i + 0.25],
-                                    y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
-                                    mode: 'lines',
-                                    line: { color: 'black', width: 10 },
-                                    name: `Binding Site ${index} Gap ${seqName} (${fileName})`,
-                                    hovertemplate: "<extra></extra>",  // Customize hover tooltip
-                                    showlegend: false,
-                                    visible: false  // Start hidden for toggle functionality
-                                };
-                                traces.push(gap);
-                            }
+                        traces.push(bindingSite);
+                        let gaps = get_gaps(seq);
+                        gaps.forEach(gap => {
+                            const gapLine = {
+                                x: [start + gap[0] - 0.25, start + gap[1] + 0.25],
+                                y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
+                                mode: 'lines',
+                                line: { color: 'black', width: 10 },
+                                hovertemplate: "<extra></extra>",  // Customize hover tooltip
+                                name: `Binding Site ${start}-${end} Gap ${gap[0]}-${gap[1]} ${seqName} (${fileName})`,
+                                legendgroup: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
+                                showlegend: false,
+                                visible: false  // Start hidden for toggle functionality
+                            };
+                            traces.push(gapLine);
                         });
                     });
                     segmentY += 1;
                 });
                 segmentY += 2;  // Add padding between sequences
                 seqIndex++;
+                // const gaps = plotData.gaps[fileName]?.[seqName];
+                // if (gaps) {
+                //     gaps.forEach(gap => {
+                //         const gapLine = {
+                //             x: [gap - 0.5, gap + 0.5],
+                //             y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
+                //             mode: 'lines',
+                //             line: { color: 'black', width: 10 },
+                //             name: `Binding Site ${gap} Gap ${seqName} (${fileName})`,
+                //             hovertemplate: "<extra></extra>",  // Customize hover tooltip
+                //             showlegend: false,
+                //             visible: false  // Start hidden for toggle functionality
+                //         };
+                //         traces.push(gapLine);
+                //     });
+                // }
+                //         // wherever the aligned seq is '-' add a gap
+                //         alignedSeq.split('').forEach((char, i) => {
+                //             if (char === '-' && i >= index && i < index + kmerLength) {
+                //                 const gap = {
+                //                     x: [i - 0.5, i + 0.5],
+                //                     y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
+                //                     mode: 'lines',
+                //                     line: { color: 'black', width: 10 },
+                //                     name: `Binding Site ${index} Gap ${seqName} (${fileName})`,
+                //                     hovertemplate: "<extra></extra>",  // Customize hover tooltip
+                //                     showlegend: false,
+                //                     visible: false  // Start hidden for toggle functionality
+                //                 };
+                //                 traces.push(gap);
+                //             }
+                //         });
+                //     });
+                //     segmentY += 1;
+                // });
+                // segmentY += 2;  // Add padding between sequences
+                // seqIndex++;
             }
 
             // Add max score line for each file
@@ -317,6 +356,28 @@ function uploadAndPlot() {
         console.log(error);
         console.error('Error:', error);
     });
+}
+
+function get_gaps(aligned_seq) {
+    console.log('aligned_seq', aligned_seq);
+    let gaps = [];
+    let start = -1;
+    let end = -1;
+    for (let i = 0; i < aligned_seq.length; i++) {
+        if (aligned_seq[i] === '-') {
+            if (start === -1) {
+                start = i;
+            }
+            end = i;
+        } else {
+            if (start !== -1) {
+                gaps.push([start, end]);
+                start = -1;
+                end = -1;
+            }
+        }
+    }
+    return gaps;
 }
 
 function toggleView() {
@@ -380,13 +441,12 @@ function set_x_ticks_inner(eventData, plotDiv) {
     }
 }
 
-function splitRanges(indices, k) {
+function splitRanges(ranges) { //TODO: indices, k) {
     // Convert indices to ranges (i.e., (index, index + k - 1)) along with the left limit (index)
-    const ranges = indices.map(index => [index, index + k - 1]);
-
-    // Sort ranges by their starting value
-    ranges.sort((a, b) => a[0] - b[0]);
-
+    // const ranges = indices.map(index => [index, index + k - 1]);
+    //
+    // // Sort ranges by their starting value
+    // ranges.sort((a, b) => a[0] - b[0]);
     // Initialize groups array
     let groups = [];
 
@@ -410,9 +470,7 @@ function splitRanges(indices, k) {
             groups.push([range]);
         }
     });
-
-    // Include the left limit (start index) in each group
-    return groups.map(group => group.map(range => range[0]));
+    return groups;
 }
 
 function getAlignedSeq(seq, aligned_scores) {
