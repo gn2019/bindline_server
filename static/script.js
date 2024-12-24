@@ -151,6 +151,18 @@ function uploadAndPlot() {
         });
     }
 
+    // Append slider values
+    const enableRanksThreshold = document.getElementById('enable_ranks_threshold').checked;
+    if (enableRanksThreshold) {
+        const ranksThreshold = document.getElementById('ranks_threshold').value;
+        formData.append('ranks_threshold', ranksThreshold);
+    }
+    const enableScoreThreshold = document.getElementById('enable_score_threshold').checked;
+    if (enableScoreThreshold) {
+        const scoreThreshold = document.getElementById('score_threshold').value;
+        formData.append('score_threshold', scoreThreshold);
+    }
+
     // Fetch call to upload files and plot data
     fetch('/upload', {
         method: 'POST',
@@ -162,6 +174,7 @@ function uploadAndPlot() {
             alert(plotData.error);
             return;
         }
+        console.log(plotData)
 
         // Clear previous plot data
         const plotDiv = document.getElementById('plot');
@@ -194,6 +207,7 @@ function uploadAndPlot() {
                     y: alignedScores,
                     mode: 'lines',
                     name: `${seqName} (${fileName})`,
+                    legendgroup: `${seqName} (${fileName})`,
                     type: 'scatter',
                     line: { color: colorPalette[seqIndex % colorPalette.length] }
                 };
@@ -203,15 +217,17 @@ function uploadAndPlot() {
                 const highestVals = plotData.highest_values[fileName]?.[seqName];
                 const sequence_str = plotData.sequence_strs[plotData.ref_name];
                 // k is the difference between the length of alignedScores and sequence_str
-                const k = sequence_str.length - alignedScores.length + 1;
-                const alignedSeq = getAlignedSeq(plotData.sequence_strs[seqName], alignedScores);
+                const alignedSeq = plotData.aligned_seqs[seqName];
+                const k = alignedSeq.length - alignedScores.length + 1;
                 if (highestVals) {
                     const highlightTrace = {
                         x: Array.from({ length: alignedScores.length }, (_, i) => i),
                         y: highestVals,
                         mode: 'markers',
                         showlegend: false,  // Hide max score line from legend
+                        legendgroup: `${seqName} (${fileName})`,
                         text: alignedScores.map((_, i) => getKmerSeqFromAlignedSeq(alignedSeq, k, i)), // Tooltip showing sequence segment, TODO: 8 is hardcoded
+                        // tooltip should be the text variable
                         hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
                         marker: { color: colorPalette[seqIndex % colorPalette.length], size: 10, symbol: 'circle' }
                     };
@@ -252,7 +268,6 @@ function uploadAndPlot() {
                                 y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
                                 mode: 'lines',
                                 line: { color: 'black', width: 10 },
-                                hovertemplate: "<extra></extra>",  // Customize hover tooltip
                                 name: `Binding Site ${start}-${end} Gap ${gap[0]}-${gap[1]} ${seqName} (${fileName})`,
                                 legendgroup: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
                                 showlegend: false,
@@ -359,7 +374,6 @@ function uploadAndPlot() {
 }
 
 function get_gaps(aligned_seq) {
-    console.log('aligned_seq', aligned_seq);
     let gaps = [];
     let start = -1;
     let end = -1;
@@ -476,7 +490,7 @@ function splitRanges(ranges) { //TODO: indices, k) {
 function getAlignedSeq(seq, aligned_scores) {
     let cur = seq.length - aligned_scores.length + 1;
     let aligned_seq = seq.substring(0, cur);
-    for (let i = 0; i < aligned_scores.length; i++) {
+    for (let i = 0; i < aligned_scores.length - 1; i++) {
         if (aligned_scores[i] !== null) {
             aligned_seq += seq[cur];
             cur++;
@@ -498,7 +512,7 @@ function getKmerFromAlignedSeq(aligned_seq, k, start = 0) {
             kmer += aligned_seq[i];
             count++;
             if (count === k) {
-            break;
+                break;
             }
         }
     }
@@ -513,6 +527,7 @@ function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
     return getKmerFromAlignedSeq(aligned_seq, k, start)[1];
 }
 
+
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', () => loadSequences());
@@ -520,3 +535,41 @@ document.getElementById('add-sequence-row').addEventListener('click', () => addS
 document.getElementById('toggle-view').addEventListener('click', () => toggleView());
 // Handle uploading and plotting data from multiple E-Score files
 document.getElementById('upload-and-plot').addEventListener('click', () => uploadAndPlot());
+
+// Function to toggle slider and input enabled/disabled state using the checkbox
+function toggleSliderAndInput(checkboxId, sliderId, inputId) {
+    const checkbox = document.getElementById(checkboxId);
+    const slider = document.getElementById(sliderId);
+    const input = document.getElementById(inputId);
+
+    checkbox.addEventListener('change', function () {
+        const isEnabled = checkbox.checked;
+        slider.disabled = !isEnabled;
+        input.disabled = !isEnabled;
+    });
+}
+
+// Function to synchronize slider and input values
+function syncSliderAndInput(sliderId, inputId) {
+    const slider = document.getElementById(sliderId);
+    const input = document.getElementById(inputId);
+
+    slider.addEventListener('input', function () {
+        input.value = slider.value; // Update input when slider changes
+    });
+
+    input.addEventListener('input', function () {
+        // Ensure the input value stays within slider range
+        let value = parseFloat(input.value)
+        if (value < slider.min) input.value = slider.min;
+        if (value > slider.max) input.value = slider.max;
+        slider.value = input.value; // Update slider when input changes
+    });
+}
+
+// Apply functionality to both sliders and inputs
+toggleSliderAndInput('enable_score_threshold', 'score_threshold', 'score_threshold_input');
+toggleSliderAndInput('enable_ranks_threshold', 'ranks_threshold', 'ranks_threshold_input');
+
+syncSliderAndInput('score_threshold', 'score_threshold_input');
+syncSliderAndInput('ranks_threshold', 'ranks_threshold_input');

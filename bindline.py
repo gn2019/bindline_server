@@ -1,3 +1,4 @@
+import functools
 import itertools
 import os
 import re
@@ -333,6 +334,16 @@ class EScoreTable(ResultTable):
             # calculate the score of the motif
             scores[i] = self._dict.get(seq[i:i + self._mer], None)  # TODO: None?
         return scores
+
+    def max_score(self):
+        return max(self._dict.values())
+
+    @functools.lru_cache(maxsize=1000)
+    def rank_threshold(self, relative_threshold):
+        # get the threshold of the relative threshold
+        sorted_scores = sorted(self._dict.values())
+        return sorted_scores[int(len(sorted_scores) * relative_threshold / 100)]
+
 
 
 class ZScoreTable(EScoreTable):
@@ -675,24 +686,26 @@ def mer8_to_dict(mer8_content, score_type='E'):
         mer8_content = mer8_content.decode('utf8')
     mer8_content = [i.strip(' \r\n').split('\t') for i in mer8_content.strip(' \r\n').split('\n')]
     # remove header if exists
-    if set('ACGT') - set(mer8_content[0][0]):
+    if set(mer8_content[0][0]) - set('ACGT'):
         mer8_content = mer8_content[1:]
     # determine file format by number of columns
     cols_num = len(mer8_content[0])
     score_column = {
         3: {'E': 2},
-        4: {'I': 2, 'E': 3},
         5: {'E': 2, 'I': 3, 'Z': 4},
         9: {'I': 2, 'E': 3, 'Z': 4},
         20: {'I': 2, 'E': 3, 'Z': 4}
      }
     if cols_num not in score_column:
-        raise ValueError('mer8 file has wrong number of columns')
+        if cols_num == 4:
+            score_column[cols_num] = {'E': 2, 'I': 3} if float(mer8_content[0][2]) <= 0.5 else {'I': 2, 'E': 3}
+        else:
+            raise ValueError('mer8 file has wrong number of columns')
     if score_type not in score_column[cols_num]:
         raise ValueError(f'No {score_type} score in the table')
     score_idx = score_column[cols_num][score_type]
-    if cols_num == 5:
-        mer8_content = mer8_content[1:]
+    # if cols_num == 5:
+    #     mer8_content = mer8_content[1:]
     mer8_dict = {i[0]: -0.5 if i[score_idx] in ('', 'NA') else float(i[score_idx]) for i in mer8_content}
     mer8_dict.update({i[1]: -0.5 if i[score_idx] in ('', 'NA') else float(i[score_idx]) for i in mer8_content})
     return mer8_dict
@@ -743,3 +756,44 @@ class TFIdentifier:
 
     def __call__(self, seqs):
         return {name: (seq, self.identify(seq)) for name, seq in seqs.items()}
+
+import time
+class TFIdentifier:
+    def __init__(self, absolute_hypo_file=None, rank_hypo_file=None, kmer=8):
+        assert absolute_hypo_file or rank_hypo_file, "At least one of the files should be provided"
+        self._mat, self._rank_mat = None, None
+
+        if absolute_hypo_file:
+            with open(absolute_hypo_file, 'rb') as file:
+                self._mat = pickle.load(file)
+        if rank_hypo_file:
+            with open(rank_hypo_file, 'rb') as file:
+                self._rank_mat = pickle.load(file)
+        # length of the column names is the kmer
+        self._mer = kmer or (len(next(iter(self._mat))) if self._mat else len(next(iter(self._rank_mat))))
+
+    def __identify(self, seq):
+        TFs = []
+        # for each position in the sequence
+        for i in range(len(seq) - self._mer + 1):
+            # calculate the score of the motif
+            # take the TF names which have a value in seq[i:i + self._mer] column by pandas
+            TFs.append(self._threshold_mat[seq[i:i + self._mer]].dropna().index.tolist())
+        return TFs
+
+    def __call__(self, seqs, absolute_threshold=None, rank_threshold=None):
+        assert absolute_threshold or rank_threshold, "At least one of the thresholds should be provided"
+        assert absolute_threshold is None or self._mat is not None, "Absolute matrix is not provided"
+        assert rank_threshold is None or self._rank_mat is not None, "Rank matrix is not provided"
+
+        if rank_threshold:
+            rank_threshold *= self._rank_mat.max().max() / 100
+        # turn all values below threshold to nan, keep it df
+        if absolute_threshold:
+            self._threshold_mat = self._mat.where(self._mat >= absolute_threshold, np.nan)
+            if rank_threshold:
+                self._threshold_mat += self._rank_mat.where(self._rank_mat >= rank_threshold, np.nan)
+        elif rank_threshold:
+            self._threshold_mat = self._rank_mat.where(self._rank_mat >= rank_threshold, np.nan)
+
+        return {name: (seq, self.__identify(seq)) for name, seq in seqs.items()}

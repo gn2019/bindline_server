@@ -10,19 +10,24 @@ import sys
 import numpy as np
 
 import bindline
+import consts
 
 app = Flask(__name__)
 CORS(app)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['FASTA_FOLDER'] = os.path.join(app.config['UPLOAD_FOLDER'], 'fasta')
-app.config['ESCORE_FOLDER'] = os.path.join(app.config['UPLOAD_FOLDER'], 'escore')
+app.config['UPLOAD_FOLDER'] = consts.UPLOAD_DIR
+app.config['FASTA_FOLDER'] = consts.FASTA_DIR
+app.config['ESCORE_FOLDER'] = consts.ESCORE_DIR
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FASTA_FOLDER'], exist_ok=True)
 os.makedirs(app.config['ESCORE_FOLDER'], exist_ok=True)
 
-identifier = bindline.TFIdentifier(os.path.join(app.config['UPLOAD_FOLDER'], 'main_dict.pkl'))
-
+escore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ESCORE_MATRIX_PKL,
+                                          rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
+zscore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ZSCORE_MATRIX_PKL,
+                                            rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
+iscore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ISCORE_MATRIX_PKL,
+                                            rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
 
 def recursive_dir(path):
     path = os.path.abspath(path)
@@ -115,12 +120,32 @@ def get_score_file(e_score_path, file_type):
             raise ValueError("Invalid file type selected.")
     return score
 
+def float_or_none(value):
+    return float(value) if value is not None else None
+
+def get_identifier_by_type(file_type):
+    if file_type == 'escore':
+        return escore_identifier
+    elif file_type == 'zscore':
+        return zscore_identifier
+    elif file_type == 'iscore':
+        return iscore_identifier
+    else:
+        raise ValueError("Invalid file type selected.")
+
+
 @app.route('/find-binding-sites', methods=['GET'])
 def find_binding_sites():
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
+    score_threshold = float_or_none(request.form.get('score_threshold'))
+    ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
 
-    identified_TFs = identifier(sequences)
+    # identify by both identifiers, and combine
+    identifier = get_identifier_by_type(file_type)
+    identified_TFs = identifier(sequences, absolute_threshold=score_threshold, rank_threshold=ranks_threshold)
+
+    ref_name = max(sequences, key=lambda k: len(sequences[k]))
 
     # Extract unique file paths of identified TFs
     identified_unq_files = []
@@ -147,7 +172,7 @@ def find_binding_sites():
         for seq_name in identified_TFs:
             curr_bs = [score[seq_name][1][i] if file in pos_ls else None
                        for i, pos_ls in enumerate(identified_TFs[seq_name][1])]
-            identified_binding_sites[file][seq_name] = curr_bs
+            _, identified_binding_sites[file][seq_name] = align_scores(sequences[ref_name], sequences[seq_name], curr_bs)
 
     # Compute the scores for each identified transcription factor (TF) across all sequences.
     # The dictionary has the following structure:
@@ -164,20 +189,20 @@ def find_binding_sites():
     max_scores = {}
     identified_scores = {}
     binding_sites, gaps = {}, {}
+    aligned_seqs = {}
+
     for e_score_file, table in identified_tables.items():
         scores_dict = table.score_seqs(sequences)
-        max_scores[e_score_file] = max(table._dict.values())
+        max_scores[e_score_file] = table.max_score()
         curr_aligned_scores = {}
-        ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
         ref_seq, ref_scores = scores_dict[ref_name]
 
         curr_binding_sites, curr_gaps = {}, {}
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             # curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
-            aligned_seq, aligned_scores = align_scores(ref_seq, sequence_str, sequence_scores)
-            curr_aligned_scores[name] = aligned_scores
+            aligned_seqs[name], curr_aligned_scores[name] = align_scores(ref_seq, sequence_str, sequence_scores)
             curr_binding_sites[name], curr_gaps[name] = get_binding_sites(identified_binding_sites[e_score_file][name],
-                                                                          aligned_seq, table._mer)
+                                                                          aligned_seqs[name], table._mer)
 
         identified_scores[e_score_file] = curr_aligned_scores
         binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
@@ -185,8 +210,7 @@ def find_binding_sites():
     plot_data = {
         'aligned_scores': identified_scores,
         'highest_values': identified_binding_sites,
-        'sequence_names': list(scores_dict.keys()),
-        'sequence_strs': {k: v[0] for k,v in scores_dict.items()},
+        'sequence_strs': sequences,
         'ref_name': ref_name,
         'max_scores': max_scores,
         'binding_sites': binding_sites,
@@ -221,10 +245,14 @@ def upload_files():
     sequences = json.loads(request.form.get('sequences'))
 
     aligned_scores = {}
+    aligned_seqs = {}
     highest_values = {}
     max_scores = {}
     binding_sites = {}
     gaps = {}
+
+    score_threshold = float_or_none(request.form.get('score_threshold'))
+    ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
 
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
@@ -233,25 +261,27 @@ def upload_files():
         name, motif, table = next(score.parse_tables())
         scores_dict = table.score_seqs(sequences)
 
-        max_scores[e_score_file] = max(table._dict.values())
+        max_scores[e_score_file] = table.max_score()
         curr_aligned_scores = {}
         ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
         ref_seq, ref_scores = scores_dict[ref_name]
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
-            aligned_seq, curr_aligned_scores[name] = align_scores(ref_seq, sequence_str, sequence_scores)
+            aligned_seqs[name], curr_aligned_scores[name] = align_scores(ref_seq, sequence_str, sequence_scores)
 
         aligned_scores[e_score_file] = curr_aligned_scores
 
-        # highest_values is for each aligned_scores the same list but all None except the top 10%
         curr_highest_values = {}
         for name, scores in aligned_scores[e_score_file].items():
-            # sort the not None values and get the threshold value
-            sorted_scores = sorted([score for score in scores if score is not None])
-            threshold = sorted_scores[int(len(sorted_scores) * 0.95)]
-            curr_highest_values[name] = [score if score is not None and score >= threshold else None for score in scores]
+            # highest scores are the ones above the absolute and relative thresholds, if exist
+            if score_threshold is None and ranks_threshold is None:
+                curr_highest_values[name] = [None for _ in scores]
+            else:
+                curr_highest_values[name] = [score if score is not None and
+                                             (score_threshold is None or score >= score_threshold) and
+                                             (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
+                                             else None for score in scores]
         highest_values[e_score_file] = curr_highest_values
-        # highest_values[e_score_file] = {}  # TODO
 
         curr_binding_sites, curr_gaps = {}, {}
         for name, scores in aligned_scores[e_score_file].items():
@@ -262,8 +292,8 @@ def upload_files():
     plot_data = {
         'aligned_scores': aligned_scores,
         'highest_values': highest_values,
-        'sequence_names': list(scores_dict.keys()),
-        'sequence_strs': {k: v[0] for k,v in scores_dict.items()},
+        'sequence_strs': sequences,
+        'aligned_seqs': aligned_seqs,
         'ref_name': ref_name,
         'max_scores': max_scores,
         'binding_sites': binding_sites,
