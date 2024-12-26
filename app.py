@@ -211,6 +211,7 @@ def find_binding_sites():
         'aligned_scores': identified_scores,
         'highest_values': identified_binding_sites,
         'sequence_strs': sequences,
+        'aligned_seqs': aligned_seqs,
         'ref_name': ref_name,
         'max_scores': max_scores,
         'binding_sites': binding_sites,
