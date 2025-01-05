@@ -134,16 +134,25 @@ def get_identifier_by_type(file_type):
         raise ValueError("Invalid file type selected.")
 
 
+@functools.lru_cache(maxsize=1000)
+def get_score_table(file_path, file_type):
+    return next(get_score_file(file_path, file_type).parse_tables())
+
+
 @app.route('/find-binding-sites', methods=['GET'])
 def find_binding_sites():
+    import time
+    _start = time.time()
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
     score_threshold = float_or_none(request.form.get('score_threshold'))
     ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
 
+    print("Time to load data: ", time.time() - _start)
     # identify by both identifiers, and combine
     identifier = get_identifier_by_type(file_type)
     identified_TFs = identifier(sequences, absolute_threshold=score_threshold, rank_threshold=ranks_threshold)
+    print("Time to identify TFs: ", time.time() - _start)
 
     ref_name = max(sequences, key=lambda k: len(sequences[k]))
 
@@ -159,20 +168,30 @@ def find_binding_sites():
         for pos_ls in pos_nested_ls:
             identified_unq_files.extend(pos_ls)
     identified_unq_files = np.unique(identified_unq_files)
+    print("Time to get unique files: ", time.time() - _start)
 
     # Get the tables for each identified file
     identified_tables = {}
     identified_binding_sites = {}
     for file in identified_unq_files:
+        _start2 = time.time()
         file_path = os.path.join(app.config['ESCORE_FOLDER'], file)
-        _, _, identified_tables[file] = next(get_score_file(file_path, file_type).parse_tables())
+        _, _, identified_tables[file] = get_score_table(file_path, file_type)
+        print("Time to get table: ", time.time() - _start2)
+        _start2 = time.time()
         score = identified_tables[file].score_seqs(sequences)
+        print("Time to score sequences: ", time.time() - _start2)
+        _start2 = time.time()
 
         identified_binding_sites[file] = {}
         for seq_name in identified_TFs:
             curr_bs = [score[seq_name][1][i] if file in pos_ls else None
                        for i, pos_ls in enumerate(identified_TFs[seq_name][1])]
+            print("Time to get binding sites: ", time.time() - _start2)
+            _start2 = time.time()
             _, identified_binding_sites[file][seq_name] = align_scores(sequences[ref_name], sequences[seq_name], curr_bs)
+            print("Time to align binding sites: ", time.time() - _start2)
+            _start2 = time.time()
 
     # Compute the scores for each identified transcription factor (TF) across all sequences.
     # The dictionary has the following structure:
@@ -186,6 +205,7 @@ def find_binding_sites():
     #       seq name 2: (sequence, array of scores)
     #   }
     # }
+    print("Time to get tables: ", time.time() - _start)
     max_scores = {}
     identified_scores = {}
     binding_sites, gaps = {}, {}
@@ -207,6 +227,7 @@ def find_binding_sites():
         identified_scores[e_score_file] = curr_aligned_scores
         binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
 
+    print("Time to align scores: ", time.time() - _start)
     plot_data = {
         'aligned_scores': identified_scores,
         'highest_values': identified_binding_sites,
@@ -258,8 +279,7 @@ def upload_files():
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
 
-        score = get_score_file(e_score_path, file_type)
-        name, motif, table = next(score.parse_tables())
+        name, motif, table = get_score_table(e_score_path, file_type)
         scores_dict = table.score_seqs(sequences)
 
         max_scores[e_score_file] = table.max_score()
