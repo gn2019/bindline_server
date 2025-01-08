@@ -3,3 +3,5 @@ Flask-Cors==5.0.0
 pandas
 seqlogo
 matplotlib
+biopython>=1.83
+tqdm

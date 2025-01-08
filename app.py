@@ -78,6 +78,29 @@ def align_scores(ref_seq, seq, scores):
     return aligned_seq, aligned_scores
 
 
+def align_sequences_by_name(name, seq):
+    name = name.split('_')[-1]
+    typ = name[0]
+    if typ in ('m', 'i'):
+        return seq
+    elif typ == 'd':
+        pos = int(name[1:])
+        return seq[:pos] + '-' + seq[pos:]
+    raise ValueError("Invalid mutation type.")
+
+
+def align_scores_by_name(name, seq, scores):
+    name = name.split('_')[-1]
+    typ = name[0]
+    if typ in ('m', 'i'):
+        return seq, list(scores)
+    elif typ == 'd':
+        pos = int(name[1:])
+        # concat the scores with None in the position of the deletion
+        return seq[:pos] + '-' + seq[pos + 1:], list(scores[:pos]) + [None] + list(scores[pos:])
+    raise ValueError("Invalid mutation type.")
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -247,11 +270,43 @@ def find_binding_sites():
     )
 
 
-@app.route('/upload', methods=['POST'])
-def upload_files():
-    if request.form['search_binding_sites'] == 'true':
-        return find_binding_sites()
+def get_all_point_mutations(sequence):
+    mutants = {}
+    for i, base in enumerate(sequence):
+        for c in 'ACGT':
+            if base != c:
+                mutants[f'm{i}{c}'] = sequence[:i] + c + sequence[i + 1:]
+    return mutants
 
+
+def get_all_insertions(sequence):
+    mutants = {f'i0{c}': c + sequence for c in 'ACGT'}
+    for i, base in enumerate(sequence):
+        for c in 'ACGT':
+            if base != c:
+                mutants[f'i{i+1}{c}'] = sequence[:i] + c + sequence[i:]
+    return mutants
+
+
+def get_all_deletions(sequence):
+    mutants = {}
+    for i, base in enumerate(sequence):
+        mutants[f'd{i}'] = sequence[:i] + sequence[i + 1:]
+    return mutants
+
+
+def get_all_mutants(name, sequence):
+    mutants = {name: sequence}
+    for suff, seq in get_all_point_mutations(sequence).items():
+        mutants[f'{name}_{suff}'] = seq
+    for suff, seq in get_all_insertions(sequence).items():
+        mutants[f'{name}_{suff}'] = seq
+    for suff, seq in get_all_deletions(sequence).items():
+        mutants[f'{name}_{suff}'] = seq
+    return mutants
+
+
+def get_escore_files(request):
     if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
         # save them (it's a list of files)
         e_score_files = request.files.getlist('e_score')
@@ -259,12 +314,133 @@ def upload_files():
             e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file.filename)
             e_score_file.save(e_score_path)
         # take their names
-        e_score_files = [f.filename for f in e_score_files]
+        return [f.filename for f in e_score_files]
     else:
-        e_score_files = [request.form[var] for var in request.form if var.startswith('e_score_')]
+        return [request.form[var] for var in request.form if var.startswith('e_score_')]
+
+
+def does_equivalent_bs_exist(bs, binding_sites):
+    return (bs[2].replace('-', '') in map(lambda x: x[2], binding_sites) or
+            (bs[:2] in map(lambda x: x[:2], binding_sites)))
+
+
+def find_significant_mutations():
+    file_type = request.form['file_type']
+    sequences = json.loads(request.form.get('sequences'))
+    assert len(sequences) == 1, "Only one sequences are allowed for this analysis."  # checked in js
+    score_threshold = float_or_none(request.form.get('score_threshold'))
+    ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
+    assert score_threshold is not None or ranks_threshold is not None, \
+        "Either score or rank threshold must be provided."   # checked in js
+
+    ref_name = list(sequences.keys())[0]
+    sequences = get_all_mutants(*next(iter(sequences.items())))
+    e_score_files = get_escore_files(request)
+
+    aligned_scores = {}
+    aligned_seqs = {}
+    highest_values = {}
+    max_scores = {}
+    binding_sites = {}
+    gaps = {}
+
+    for e_score_file in e_score_files:
+        e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
+
+        name, motif, table = get_score_table(e_score_path, file_type)
+        scores_dict = table.score_seqs(sequences)
+
+        max_scores[e_score_file] = table.max_score()
+        curr_aligned_scores = {}
+        ref_seq, ref_scores = scores_dict[ref_name]
+
+        for name, (sequence_str, sequence_scores) in scores_dict.items():
+            if name == ref_name:
+                aligned_seqs[name], curr_aligned_scores[name] = sequence_str, list(sequence_scores)
+            else:
+                aligned_seqs[name], curr_aligned_scores[name] = align_scores_by_name(name, sequence_str, sequence_scores)
+
+        aligned_scores[e_score_file] = curr_aligned_scores
+
+        curr_highest_values = {}
+        for name, scores in aligned_scores[e_score_file].items():
+            # highest scores are the ones above the absolute and relative thresholds, if exist
+            if score_threshold is None and ranks_threshold is None:
+                curr_highest_values[name] = [None for _ in scores]
+            else:
+                curr_highest_values[name] = [score if score is not None and
+                                                      (score_threshold is None or score >= score_threshold) and
+                                                      (ranks_threshold is None or score >= table.rank_threshold(
+                                                          ranks_threshold))
+                                             else None for score in scores]
+        highest_values[e_score_file] = curr_highest_values
+
+        curr_binding_sites, curr_gaps = {}, {}
+        for name, scores in aligned_scores[e_score_file].items():
+            curr_binding_sites[name], curr_gaps[name] = get_binding_sites(
+                curr_highest_values[name],
+                align_sequences_by_name(name, sequences[name]) if name != ref_name else sequences[name],
+                table._mer)
+        binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
+
+        # reduce binding sites
+        # leave only one occurrence of each threesome
+        bs_set = set()
+        for name in binding_sites[e_score_file]:
+            indices_to_remove = []
+            for i, bs in enumerate(binding_sites[e_score_file][name]):
+                if bs[2].replace('-', '') in bs_set:
+                    indices_to_remove.append(i)
+                else:
+                    bs_set.add(bs[2])
+            for i in reversed(indices_to_remove):
+                del binding_sites[e_score_file][name][i]
+
+        for name in sequences.keys():
+            if name == ref_name:
+                continue
+            indices_to_remove = []
+            for i, bs in enumerate(curr_binding_sites[name]):
+                if does_equivalent_bs_exist(bs, binding_sites[e_score_file][ref_name]):
+                    indices_to_remove.append(i)
+            if len(indices_to_remove) == len(curr_binding_sites[name]):
+                # remove from all dicts
+                del aligned_scores[e_score_file][name]
+                del highest_values[e_score_file][name]
+                del binding_sites[e_score_file][name]
+                del gaps[e_score_file][name]
+            else:
+                # remove only the equivalent binding sites
+                for i in reversed(indices_to_remove):
+                    del curr_binding_sites[name][i]
+
+    plot_data = {
+        'aligned_scores': aligned_scores,
+        'highest_values': highest_values,
+        'sequence_strs': sequences,
+        'aligned_seqs': aligned_seqs,
+        'ref_name': ref_name,
+        'max_scores': max_scores,
+        'binding_sites': binding_sites,
+        'gaps': gaps
+    }
+
+    return Response(
+        json.dumps(plot_data, allow_nan=False),
+        mimetype='application/json'
+    )
+
+
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    if request.form['search_binding_sites'] == 'true':
+        return find_binding_sites()
+    if request.form['search_significant_mutations'] == 'true':
+        return find_significant_mutations()
 
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
+    e_score_files = get_escore_files(request)
 
     aligned_scores = {}
     aligned_seqs = {}

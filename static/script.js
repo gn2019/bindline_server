@@ -132,6 +132,14 @@ function uploadAndPlot() {
     // Append selected sequences as JSON
     formData.append('sequences', JSON.stringify(selectedSequences));
 
+    const searchSignificantMutations = document.getElementById('search-significant-mutations').checked;
+    // if true then should be only one sequence
+    if (searchSignificantMutations && Object.keys(selectedSequences).length !== 1) {
+        alert("Please select only one sequence for searching significant mutations.");
+        return;
+    }
+    formData.append('search_significant_mutations', searchSignificantMutations);
+
     // if checkbox is checked, don't use E-Score files
     const searchBindingSites = document.getElementById('search-binding-sites').checked;
     formData.append('search_binding_sites', searchBindingSites);
@@ -161,6 +169,12 @@ function uploadAndPlot() {
     if (enableScoreThreshold) {
         const scoreThreshold = document.getElementById('score_threshold').value;
         formData.append('score_threshold', scoreThreshold);
+    }
+
+    // if searchBindingSites or searchSignificantMutations are checked, then at least one of the thresholds should be enabled
+    if ((searchBindingSites || searchSignificantMutations) && !enableRanksThreshold && !enableScoreThreshold) {
+        alert("Please enable at least one of the thresholds.");
+        return;
     }
 
     // Fetch call to upload files and plot data
