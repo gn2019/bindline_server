@@ -165,10 +165,10 @@ function uploadAndPlot() {
         const ranksThreshold = document.getElementById('ranks_threshold_input').value;
         formData.append('ranks_threshold_input', ranksThreshold);
     }
-    const enableScoreThreshold = document.getElementById('enable_score_threshold').checked;
-    if (enableScoreThreshold) {
-        const scoreThreshold = document.getElementById('score_threshold_input').value;
-        formData.append('score_threshold_input', scoreThreshold);
+    const enableEScoreThreshold = document.getElementById('enable_score_threshold').checked;
+    if (enableEScoreThreshold) {
+        const escoreThreshold = document.getElementById('score_threshold_input').value;
+        formData.append('score_threshold_input', escoreThreshold);
     }
     const enableZScoreThreshold = document.getElementById('enable_zscore_threshold').checked;
     if (enableZScoreThreshold) {
@@ -182,7 +182,8 @@ function uploadAndPlot() {
     }
 
     // if searchBindingSites or searchSignificantMutations are checked, then at least one of the thresholds should be enabled
-    if ((searchBindingSites || searchSignificantMutations) && !enableRanksThreshold && !enableScoreThreshold) {
+    if ((searchBindingSites || searchSignificantMutations) &&
+        !enableRanksThreshold && !enableEScoreThreshold && !enableZScoreThreshold && !enableIScoreThreshold) {
         alert("Please enable at least one of the thresholds.");
         return;
     }
@@ -365,6 +366,7 @@ function uploadAndPlot() {
             yaxis: {
                 title: 'Score'
             },
+            hovermode: 'closest', // Tooltips only show when cursor is near a point
             showlegend: true
         });
 
@@ -431,7 +433,7 @@ function toggleView() {
         }
     });
     // Capture the current x-axis range before updating
-    const currentXRange = Plotly.d3.select('#plot').node().layout.xaxis.range;
+    const currentXRange = plotDiv.layout.xaxis.range;
     const visibleYValues = [];
     traces.forEach(trace => {
         if (trace.visible) {
@@ -451,6 +453,7 @@ function toggleView() {
         xaxis: { title: 'Position', range: currentXRange },  // Use the current x-axis range
         yaxis: { visible: showHighestOnly, range: showHighestOnly ? [] : [minY - 1, maxY + 1] }
     });
+
     set_x_ticks_inner(null, plotDiv);
 }
 
