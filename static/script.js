@@ -151,16 +151,26 @@ function uploadAndPlot() {
         });
     }
 
-    // Append slider values
+    // Append the text box values
     const enableRanksThreshold = document.getElementById('enable_ranks_threshold').checked;
     if (enableRanksThreshold) {
-        const ranksThreshold = document.getElementById('ranks_threshold').value;
-        formData.append('ranks_threshold', ranksThreshold);
+        const ranksThreshold = document.getElementById('ranks_threshold_input').value;
+        formData.append('ranks_threshold_input', ranksThreshold);
     }
     const enableScoreThreshold = document.getElementById('enable_score_threshold').checked;
     if (enableScoreThreshold) {
-        const scoreThreshold = document.getElementById('score_threshold').value;
-        formData.append('score_threshold', scoreThreshold);
+        const scoreThreshold = document.getElementById('score_threshold_input').value;
+        formData.append('score_threshold_input', scoreThreshold);
+    }
+    const enableZScoreThreshold = document.getElementById('enable_zscore_threshold').checked;
+    if (enableZScoreThreshold) {
+        const zscoreThreshold = document.getElementById('zscore_threshold_input').value;
+        formData.append('zscore_threshold_input', zscoreThreshold);
+    }
+    const enableIScoreThreshold = document.getElementById('enable_iscore_threshold').checked;
+    if (enableIScoreThreshold) {
+        const iscoreThreshold = document.getElementById('iscore_threshold_input').value;
+        formData.append('iscore_threshold_input', iscoreThreshold);
     }
 
     // Fetch call to upload files and plot data
@@ -557,19 +567,15 @@ function syncSliderAndInput(sliderId, inputId) {
     slider.addEventListener('input', function () {
         input.value = slider.value; // Update input when slider changes
     });
-
-    input.addEventListener('input', function () {
-        // Ensure the input value stays within slider range
-        let value = parseFloat(input.value)
-        if (value < slider.min) input.value = slider.min;
-        if (value > slider.max) input.value = slider.max;
-        slider.value = input.value; // Update slider when input changes
-    });
 }
 
 // Apply functionality to both sliders and inputs
 toggleSliderAndInput('enable_score_threshold', 'score_threshold', 'score_threshold_input');
+toggleSliderAndInput('enable_zscore_threshold', 'zscore_threshold', 'zscore_threshold_input');
+toggleSliderAndInput('enable_iscore_threshold', 'iscore_threshold', 'iscore_threshold_input');
 toggleSliderAndInput('enable_ranks_threshold', 'ranks_threshold', 'ranks_threshold_input');
 
 syncSliderAndInput('score_threshold', 'score_threshold_input');
+syncSliderAndInput('zscore_threshold', 'zscore_threshold_input');
+syncSliderAndInput('iscore_threshold', 'iscore_threshold_input');
 syncSliderAndInput('ranks_threshold', 'ranks_threshold_input');
