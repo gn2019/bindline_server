@@ -173,7 +173,7 @@ def find_binding_sites():
     zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
     ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
     selected_threshold = {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold}[file_type]
-    print('selected_threshold:', {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold})
+    
     print("Time to load data: ", time.time() - _start)
     # identify by both identifiers, and combine
     identifier = get_identifier_by_type(file_type)
@@ -452,8 +452,11 @@ def upload_files():
     binding_sites = {}
     gaps = {}
 
-    score_threshold = float_or_none(request.form.get('score_threshold'))
+    score_threshold = float_or_none(request.form.get('score_threshold_input'))
+    iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
+    zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
     ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
+    selected_threshold = {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold}[file_type]
 
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
@@ -474,11 +477,11 @@ def upload_files():
         curr_highest_values = {}
         for name, scores in aligned_scores[e_score_file].items():
             # highest scores are the ones above the absolute and relative thresholds, if exist
-            if score_threshold is None and ranks_threshold is None:
+            if selected_threshold is None and ranks_threshold is None:
                 curr_highest_values[name] = [None for _ in scores]
             else:
                 curr_highest_values[name] = [score if score is not None and
-                                             (score_threshold is None or score >= score_threshold) and
+                                             (selected_threshold is None or score >= selected_threshold) and
                                              (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
                                              else None for score in scores]
         highest_values[e_score_file] = curr_highest_values
