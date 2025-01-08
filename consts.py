@@ -2,6 +2,7 @@ import os.path
 
 
 UPLOAD_DIR = 'uploads'
+UPDATES_DIR = os.path.join(UPLOAD_DIR, 'updates')
 FASTA_DIR = os.path.join(UPLOAD_DIR, 'fasta')
 ESCORE_DIR = os.path.join(UPLOAD_DIR, 'escore')
 ESCORE_FILE_LIST = os.path.join(UPLOAD_DIR, 'score_file_list.txt')

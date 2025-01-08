@@ -168,13 +168,16 @@ def find_binding_sites():
     _start = time.time()
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
-    score_threshold = float_or_none(request.form.get('score_threshold'))
+    score_threshold = float_or_none(request.form.get('score_threshold_input'))
+    iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
+    zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
     ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
-
+    selected_threshold = {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold}[file_type]
+    print('selected_threshold:', {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold})
     print("Time to load data: ", time.time() - _start)
     # identify by both identifiers, and combine
     identifier = get_identifier_by_type(file_type)
-    identified_TFs = identifier(sequences, absolute_threshold=score_threshold, rank_threshold=ranks_threshold)
+    identified_TFs = identifier(sequences, absolute_threshold=selected_threshold, rank_threshold=ranks_threshold)
     print("Time to identify TFs: ", time.time() - _start)
 
     ref_name = max(sequences, key=lambda k: len(sequences[k]))
