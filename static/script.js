@@ -131,6 +131,10 @@ function uploadAndPlot() {
 
     // Append selected sequences as JSON
     formData.append('sequences', JSON.stringify(selectedSequences));
+    
+    // if checkbox is checked show only diff
+    const showOnlyDiff = document.getElementById('show-diff-only').checked;
+    formData.append('show_diff_only', showOnlyDiff);
 
     // if checkbox is checked, don't use E-Score files
     const searchBindingSites = document.getElementById('search-binding-sites').checked;
@@ -247,12 +251,18 @@ function uploadAndPlot() {
                 groupedRanges.forEach(group => {
                     group.forEach(range => {
                         //const [kmerSeq, kmerLength] = getKmerFromAlignedSeq(alignedSeq, k, index);
-                        const [start, end, seq] = range;
+                        const [start, end, seq, isAdded] = range;
+                        let line_design;
+                            if (!isAdded) {
+                                line_design = { color: '#D3D3D3' , width: 20, dash: 'dash', opacity: 0.9 };
+                            } else {
+                                line_design = { color: colorPalette[seqIndex % colorPalette.length], width: 20 };
+                            }
                         const bindingSite = {
                             x: [start, end],
                             y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
                             mode: 'lines',
-                            line: {color: colorPalette[seqIndex % colorPalette.length], width: 20},
+                            line: line_design,
                             showlegend: true,
                             name: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
                             legendgroup: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
@@ -463,7 +473,7 @@ function splitRanges(ranges) { //TODO: indices, k) {
     // ranges.sort((a, b) => a[0] - b[0]);
     // Initialize groups array
     let groups = [];
-
+    console.log(ranges)
     // Iterate through each range and place it in the first non-colliding group
     ranges.forEach(range => {
         let placed = false;
