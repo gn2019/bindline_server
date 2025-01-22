@@ -169,10 +169,10 @@ function uploadAndPlot() {
         const ranksThreshold = document.getElementById('ranks_threshold_input').value;
         formData.append('ranks_threshold_input', ranksThreshold);
     }
-    const enableEScoreThreshold = document.getElementById('enable_score_threshold').checked;
+    const enableEScoreThreshold = document.getElementById('enable_escore_threshold').checked;
     if (enableEScoreThreshold) {
-        const escoreThreshold = document.getElementById('score_threshold_input').value;
-        formData.append('score_threshold_input', escoreThreshold);
+        const escoreThreshold = document.getElementById('escore_threshold_input').value;
+        formData.append('escore_threshold_input', escoreThreshold);
     }
     const enableZScoreThreshold = document.getElementById('enable_zscore_threshold').checked;
     if (enableZScoreThreshold) {
@@ -596,13 +596,35 @@ function syncSliderAndInput(sliderId, inputId) {
     });
 }
 
-// Apply functionality to both sliders and inputs
-toggleSliderAndInput('enable_score_threshold', 'score_threshold', 'score_threshold_input');
-toggleSliderAndInput('enable_zscore_threshold', 'zscore_threshold', 'zscore_threshold_input');
-toggleSliderAndInput('enable_iscore_threshold', 'iscore_threshold', 'iscore_threshold_input');
-toggleSliderAndInput('enable_ranks_threshold', 'ranks_threshold', 'ranks_threshold_input');
+function hideThresholds() {
+    // get current file_type radio checked
+    const fileType = document.querySelector('input[name="file_type"]:checked').value;
+    const scores = ['escore', 'zscore', 'iscore'];
 
-syncSliderAndInput('score_threshold', 'score_threshold_input');
-syncSliderAndInput('zscore_threshold', 'zscore_threshold_input');
-syncSliderAndInput('iscore_threshold', 'iscore_threshold_input');
-syncSliderAndInput('ranks_threshold', 'ranks_threshold_input');
+    for (let score in scores) {
+        let thresholdDiv = document.getElementById(`${scores[score]}_threshold`);
+        console.log(fileType, score, thresholdDiv);
+        if (fileType === scores[score]) {
+            thresholdDiv.style.display = "flex";
+        } else {
+            thresholdDiv.style.display = "none";
+        }
+    }
+}
+
+// apply hideThresholds on page load and on change of radio buttons
+hideThresholds();
+document.querySelectorAll('input[name="file_type"]').forEach(radio => {
+    radio.addEventListener('change', hideThresholds);
+});
+
+// Apply functionality to both sliders and inputs
+toggleSliderAndInput('enable_escore_threshold', 'escore_threshold_slider', 'escore_threshold_input');
+toggleSliderAndInput('enable_zscore_threshold', 'zscore_threshold_slider', 'zscore_threshold_input');
+toggleSliderAndInput('enable_iscore_threshold', 'iscore_threshold_slider', 'iscore_threshold_input');
+toggleSliderAndInput('enable_ranks_threshold', 'ranks_threshold_slider', 'ranks_threshold_input');
+
+syncSliderAndInput('escore_threshold_slider', 'escore_threshold_input');
+syncSliderAndInput('zscore_threshold_slider', 'zscore_threshold_input');
+syncSliderAndInput('iscore_threshold_slider', 'iscore_threshold_input');
+syncSliderAndInput('ranks_threshold_slider', 'ranks_threshold_input');

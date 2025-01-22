@@ -161,6 +161,15 @@ def get_identifier_by_type(file_type):
 def get_score_table(file_path, file_type):
     return next(get_score_file(file_path, file_type).parse_tables())
 
+def get_thresholds(request):
+    file_type = request.form['file_type']
+    escore_threshold = float_or_none(request.form.get('escore_threshold_input'))
+    iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
+    zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
+    ranks_threshold = float_or_none(request.form.get('ranks_threshold_input'))
+    selected_threshold = {'escore': escore_threshold, 'iscore': iscore_threshold, 'zscore': zscore_threshold}[file_type]
+    return selected_threshold, ranks_threshold
+
 
 @app.route('/find-binding-sites', methods=['GET'])
 def find_binding_sites():
@@ -168,11 +177,7 @@ def find_binding_sites():
     _start = time.time()
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
-    score_threshold = float_or_none(request.form.get('score_threshold_input'))
-    iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
-    zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
-    ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
-    selected_threshold = {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold}[file_type]
+    selected_threshold, ranks_threshold = get_thresholds(request)
     
     print("Time to load data: ", time.time() - _start)
     # identify by both identifiers, and combine
@@ -331,11 +336,7 @@ def find_significant_mutations():
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
     assert len(sequences) == 1, "Only one sequences are allowed for this analysis."  # checked in js
-    escore_threshold = float_or_none(request.form.get('score_threshold_input'))
-    zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
-    iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
-    ranks_threshold = float_or_none(request.form.get('ranks_threshold_input'))
-    selected_threshold = {'escore': escore_threshold, 'iscore': iscore_threshold, 'zscore': zscore_threshold}[file_type]
+    selected_threshold, ranks_threshold = get_thresholds(request)
     assert selected_threshold is not None or ranks_threshold is not None, \
         "Either score or rank threshold must be provided."   # checked in js
 
@@ -455,11 +456,7 @@ def upload_files():
     binding_sites = {}
     gaps = {}
 
-    score_threshold = float_or_none(request.form.get('score_threshold_input'))
-    iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
-    zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
-    ranks_threshold = float_or_none(request.form.get('ranks_threshold'))
-    selected_threshold = {'escore': score_threshold, 'iscore' : iscore_threshold, 'zscore' : zscore_threshold}[file_type]
+    selected_threshold, ranks_threshold = get_thresholds(request)
 
     for e_score_file in e_score_files:
         e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)

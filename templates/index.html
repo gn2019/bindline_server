@@ -76,41 +76,40 @@
                 <button class="btn btn-success btn-sm ms-2" type="button" id="toggle-view">Toggle Highest Values</button>
 
                 <div class="d-flex flex-column mb-3">
-                    
-    <!-- E-Score Threshold -->
-    <div class="d-flex align-items-center mb-2">
-        <input type="checkbox" id="enable_score_threshold" class="form-check-input me-2">
-        <label for="enable_score_threshold" class="form-label me-2">E-Score Threshold:</label>
-        <input type="range" min="0.3" max="0.5" step="0.01" value="0.45" id="score_threshold" class="form-range flex-grow-1 me-2" disabled>
-        <input type="number" min="-0.5" max="0.5" step="0.01" value="0.45" id="score_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-    </div>
-    
-    <!-- Ranks Threshold -->
-    <div class="d-flex align-items-center mb-2">
-        <input type="checkbox" id="enable_ranks_threshold" class="form-check-input me-2">
-        <label for="enable_ranks_threshold" class="form-label me-2">Ranks Threshold:</label>
-        <input type="range" min="95" max="100" step="0.1" value="99" id="ranks_threshold" class="form-range flex-grow-1 me-2" disabled>
-        <input type="number" min="0" max="100" step="0.1" value="99" id="ranks_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-    </div>
-    
-    <!-- Z-Score Threshold -->
-    <div class="d-flex align-items-center mb-2">
-        <input type="checkbox" id="enable_zscore_threshold" class="form-check-input me-2">
-        <label for="enable_zscore_threshold" class="form-label me-2">Z-Score Threshold:</label>
-        <input type="range" min="15" max="25" step="0.5" value="18" id="zscore_threshold" class="form-range flex-grow-1 me-2" disabled>
-        <input type="number" min="0" max="50" step="0.5" value="18" id="zscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-    </div>
-    
-    <!-- I-Score Threshold -->
-    <div class="d-flex align-items-center">
-        <input type="checkbox" id="enable_iscore_threshold" class="form-check-input me-2">
-        <label for="enable_iscore_threshold" class="form-label me-2">I-Score Threshold:</label>
-        <input type="range" min="0" max="65536" step="1" value="60000" id="iscore_threshold" class="form-range flex-grow-1 me-2" disabled>
-        <input type="number" min="0" max="65536" step="1" value="60000" id="iscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-    </div>
-</div>
+                    <!-- E-Score Threshold -->
+                    <div id="escore_threshold" class="align-items-center mb-2">
+                        <input type="checkbox" id="enable_escore_threshold" class="form-check-input me-2">
+                        <label for="enable_escore_threshold" class="form-label me-2">E-Score Threshold:</label>
+                        <input type="range" min="0.3" max="0.5" step="0.01" value="0.45" id="escore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                        <input type="number" min="-0.5" max="0.5" step="0.01" value="0.45" id="escore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                    </div>
 
+                    <!-- Z-Score Threshold -->
+                    <div id="zscore_threshold" class="align-items-center mb-2">
+                        <input type="checkbox" id="enable_zscore_threshold" class="form-check-input me-2">
+                        <label for="enable_zscore_threshold" class="form-label me-2">Z-Score Threshold:</label>
+                        <input type="range" min="15" max="25" step="0.5" value="18" id="zscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                        <input type="number" min="0" max="50" step="0.5" value="18" id="zscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                    </div>
+
+                    <!-- I-Score Threshold -->
+                    <div id="iscore_threshold" class="align-items-center mb-2">
+                        <input type="checkbox" id="enable_iscore_threshold" class="form-check-input me-2">
+                        <label for="enable_iscore_threshold" class="form-label me-2">I-Score Threshold:</label>
+                        <input type="range" min="0" max="65536" step="1" value="60000" id="iscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                        <input type="number" min="0" max="65536" step="1" value="60000" id="iscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                    </div>
+
+                    <!-- Ranks Threshold -->
+                    <div id="ranks_threshold" class="d-flex align-items-center mb-2">
+                        <input type="checkbox" id="enable_ranks_threshold" class="form-check-input me-2">
+                        <label for="enable_ranks_threshold" class="form-label me-2">Ranks Threshold:</label>
+                        <input type="range" min="95" max="100" step="0.1" value="99" id="ranks_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                        <input type="number" min="0" max="100" step="0.1" value="99" id="ranks_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                    </div>
+                </div>
             </div>
+
             <div class="form-check form-check-inline">
                             <input class="form-check input" type="checkbox" id="show-diff-only" name="show-diff-only">
                             <label class="form-check label" for="show-diff-only">Show diff only</label>
