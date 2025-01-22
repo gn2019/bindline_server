@@ -495,6 +495,19 @@ def upload_files():
                 curr_highest_values[name], align_sequences(ref_seq, sequences[name]), table._mer)
         binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
 
+    if request.form['show_diff_only'] == 'true':
+        for protein_file in binding_sites:
+            reference_seq = ref_name
+            for input_seq in binding_sites[protein_file]:
+                if input_seq != reference_seq:
+                    ref = binding_sites[protein_file][reference_seq]
+                    com = binding_sites[protein_file][input_seq]
+                    added = [bs for bs in com if bs not in ref] 
+                    removed = [(bs[0], bs[1], bs[2], False) for bs in ref if bs not in com] # false means it removed
+                    binding_sites[protein_file][input_seq] = added + removed
+            # Delete the refrence bs dict
+            binding_sites[protein_file][reference_seq] =[]
+
     plot_data = {
         'aligned_scores': aligned_scores,
         'highest_values': highest_values,
@@ -507,6 +520,7 @@ def upload_files():
     }
 
     return jsonify(plot_data)
+
 
 
 def get_binding_sites(highest_values, seq, mer):
@@ -530,7 +544,7 @@ def get_binding_sites(highest_values, seq, mer):
                     remain -= 1
                     if remain == 0:
                         break
-            curr_binding_sites.append((start, end, seq[start:end + 1]))
+            curr_binding_sites.append((start, end, seq[start:end + 1], True))
             # add to curr_gaps all the '-' indices inside (start, end) intervals
             curr_gaps += [i for i in range(start, end + 1) if seq[i] == '-']
     return curr_binding_sites, curr_gaps
