@@ -173,19 +173,13 @@ def get_thresholds(request):
 
 @app.route('/find-binding-sites', methods=['GET'])
 def find_binding_sites():
-    import time
-    _start = time.time()
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
     selected_threshold, ranks_threshold = get_thresholds(request)
-    
-    print("Time to load data: ", time.time() - _start)
+    ref_name = request.form['ref_name']
     # identify by both identifiers, and combine
     identifier = get_identifier_by_type(file_type)
     identified_TFs = identifier(sequences, absolute_threshold=selected_threshold, rank_threshold=ranks_threshold)
-    print("Time to identify TFs: ", time.time() - _start)
-
-    ref_name = max(sequences, key=lambda k: len(sequences[k]))
 
     # Extract unique file paths of identified TFs
     identified_unq_files = []
@@ -199,30 +193,20 @@ def find_binding_sites():
         for pos_ls in pos_nested_ls:
             identified_unq_files.extend(pos_ls)
     identified_unq_files = np.unique(identified_unq_files)
-    print("Time to get unique files: ", time.time() - _start)
 
     # Get the tables for each identified file
     identified_tables = {}
     identified_binding_sites = {}
     for file in identified_unq_files:
-        _start2 = time.time()
         file_path = os.path.join(app.config['ESCORE_FOLDER'], file)
         _, _, identified_tables[file] = get_score_table(file_path, file_type)
-        print("Time to get table: ", time.time() - _start2)
-        _start2 = time.time()
         score = identified_tables[file].score_seqs(sequences)
-        print("Time to score sequences: ", time.time() - _start2)
-        _start2 = time.time()
 
         identified_binding_sites[file] = {}
         for seq_name in identified_TFs:
             curr_bs = [score[seq_name][1][i] if file in pos_ls else None
                        for i, pos_ls in enumerate(identified_TFs[seq_name][1])]
-            print("Time to get binding sites: ", time.time() - _start2)
-            _start2 = time.time()
             _, identified_binding_sites[file][seq_name] = align_scores(sequences[ref_name], sequences[seq_name], curr_bs)
-            print("Time to align binding sites: ", time.time() - _start2)
-            _start2 = time.time()
 
     # Compute the scores for each identified transcription factor (TF) across all sequences.
     # The dictionary has the following structure:
@@ -236,7 +220,6 @@ def find_binding_sites():
     #       seq name 2: (sequence, array of scores)
     #   }
     # }
-    print("Time to get tables: ", time.time() - _start)
     max_scores = {}
     identified_scores = {}
     binding_sites, gaps = {}, {}
@@ -258,7 +241,9 @@ def find_binding_sites():
         identified_scores[e_score_file] = curr_aligned_scores
         binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
 
-    print("Time to align scores: ", time.time() - _start)
+    if request.form['show_diff_only'] == 'true':
+        show_diff_only(binding_sites, ref_name)
+
     plot_data = {
         'aligned_scores': identified_scores,
         'highest_values': identified_binding_sites,
@@ -340,7 +325,7 @@ def find_significant_mutations():
     assert selected_threshold is not None or ranks_threshold is not None, \
         "Either score or rank threshold must be provided."   # checked in js
 
-    ref_name = list(sequences.keys())[0]
+    ref_name = request.form['ref_name']
     sequences = get_all_mutants(*next(iter(sequences.items())))
     e_score_files = get_escore_files(request)
 
@@ -448,6 +433,7 @@ def upload_files():
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
     e_score_files = get_escore_files(request)
+    ref_name = request.form['ref_name']
 
     aligned_scores = {}
     aligned_seqs = {}
@@ -466,7 +452,6 @@ def upload_files():
 
         max_scores[e_score_file] = table.max_score()
         curr_aligned_scores = {}
-        ref_name = max(scores_dict, key=lambda k: len(scores_dict[k][1]))
         ref_seq, ref_scores = scores_dict[ref_name]
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
@@ -493,17 +478,7 @@ def upload_files():
         binding_sites[e_score_file], gaps[e_score_file] = curr_binding_sites, curr_gaps
 
     if request.form['show_diff_only'] == 'true':
-        for protein_file in binding_sites:
-            reference_seq = ref_name
-            for input_seq in binding_sites[protein_file]:
-                if input_seq != reference_seq:
-                    ref = binding_sites[protein_file][reference_seq]
-                    com = binding_sites[protein_file][input_seq]
-                    added = [bs for bs in com if bs not in ref] 
-                    removed = [(bs[0], bs[1], bs[2], False) for bs in ref if bs not in com] # false means it removed
-                    binding_sites[protein_file][input_seq] = added + removed
-            # Delete the refrence bs dict
-            binding_sites[protein_file][reference_seq] =[]
+        show_diff_only(binding_sites, ref_name)
 
     plot_data = {
         'aligned_scores': aligned_scores,
@@ -518,6 +493,17 @@ def upload_files():
 
     return jsonify(plot_data)
 
+def show_diff_only(binding_sites, ref_name):
+    for protein_file in binding_sites:
+        for input_seq in binding_sites[protein_file]:
+            if input_seq != ref_name:
+                ref = binding_sites[protein_file][ref_name]
+                com = binding_sites[protein_file][input_seq]
+                added = [bs for bs in com if bs not in ref]
+                removed = [(bs[0], bs[1], bs[2], False) for bs in ref if bs not in com]  # false means it removed
+                binding_sites[protein_file][input_seq] = added + removed
+        # Delete the refrence bs dict
+        binding_sites[protein_file][ref_name] = []
 
 
 def get_binding_sites(highest_values, seq, mer):

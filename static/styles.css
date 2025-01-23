@@ -69,3 +69,7 @@ th {
 .d-flex {
     gap: 0.5rem;
 }
+
+.ref input {
+    background-color: yellow;
+}

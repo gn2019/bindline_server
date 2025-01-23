@@ -66,6 +66,49 @@ function loadSequences() {
     });
 }
 
+function setAsRef(row) {
+    if (!isCheckedRow(row)) {
+        return;
+    }
+    // remove ref class from other rows
+    document.querySelectorAll('#sequence-tbody tr').forEach(row => {
+        unsetAsRefInner(row);
+    });
+    setAsRefInner(row);
+}
+
+function getFirstCheckedRow() {
+    const rows = document.querySelectorAll('#sequence-tbody tr');
+    for (let row of rows) {
+        if (isCheckedRow(row)) {
+            return row;
+        }
+    }
+}
+
+function setFirstAsRef() {
+    const row = getFirstCheckedRow();
+    if (row) { setAsRef(row) }
+}
+
+function isRefRow(row) {
+    return row.classList.contains('ref');
+}
+
+function isCheckedRow(row) {
+    return row.querySelector('input[type="checkbox"]').checked;
+}
+
+function setAsRefInner(row) {
+    row.classList.add('ref');
+}
+
+function unsetAsRefInner(row) {
+    row.classList.remove('ref');
+}
+
+
+
 // Add a new row to the table with optional name and sequence values
 function addSequenceRow(name = '', sequence = '') {
     const sequenceTbody = document.getElementById('sequence-tbody');
@@ -77,6 +120,12 @@ function addSequenceRow(name = '', sequence = '') {
     const plotCheckbox = document.createElement('input');
     plotCheckbox.type = 'checkbox';
     plotCheckbox.checked = true; // Default to checked
+    // when pressed, if is unchecked and is ref, find the first row with checked checkbox and set it as ref
+    plotCheckbox.addEventListener('click', (event) => {
+        if (!isCheckedRow(row) && isRefRow(row)) {
+            setFirstAsRef();
+        }
+    });
     plotCell.appendChild(plotCheckbox);
     row.appendChild(plotCell);
 
@@ -100,15 +149,34 @@ function addSequenceRow(name = '', sequence = '') {
     // Actions (Delete Row)
     const actionsCell = document.createElement('td');
     const deleteButton = document.createElement('button');
-    deleteButton.textContent = 'Delete';
-    deleteButton.addEventListener('click', () => {
+    // trash icon
+    deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
+    // no background, no border
+    deleteButton.style.backgroundColor = 'transparent';
+    deleteButton.style.border = 'none';
+    deleteButton.addEventListener('click', (event) => {
+        event.preventDefault();
         sequenceTbody.removeChild(row);
+        if (isRefRow(row)) {
+            setFirstAsRef();
+        }
     });
     actionsCell.appendChild(deleteButton);
+
+    const setRefButton = document.createElement('button');
+    setRefButton.innerText = 'Set as Ref';
+    setRefButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        setAsRef(row);
+    });
+    actionsCell.appendChild(setRefButton);
+
     row.appendChild(actionsCell);
 
     // Append the row to the table body
     sequenceTbody.appendChild(row);
+
+    setFirstAsRef();
 }
 
 function uploadAndPlot() {
@@ -117,8 +185,7 @@ function uploadAndPlot() {
 
     // Gather all checked sequences for plotting
     document.querySelectorAll('#sequence-tbody tr').forEach(row => {
-        const plotCheckbox = row.querySelector('input[type="checkbox"]');
-        if (plotCheckbox.checked) {
+        if (isCheckedRow(row)) {
             const name = row.cells[1].querySelector('input').value;
             selectedSequences[name] = row.cells[2].querySelector('textarea').value;
         }
@@ -129,12 +196,27 @@ function uploadAndPlot() {
         return;
     }
 
+    // get refName by row with ref class
+    let refRow = document.querySelector('#sequence-tbody tr.ref');
+    if (!refRow) {
+        // get the first row with checked checkbox
+        document.querySelectorAll('#sequence-tbody tr').forEach(row => {
+            if (isCheckedRow(row)) {
+                refRow = row;
+                setAsRefInner(row);
+            }
+        });
+    }
+    const refName = refRow.querySelector('input[type="text"]').value;
+
     // Append selected sequences as JSON
     formData.append('sequences', JSON.stringify(selectedSequences));
+    formData.append('ref_name', refName);
+
     
     // if checkbox is checked show only diff
-    const showOnlyDiff = document.getElementById('show-diff-only').checked;
-    formData.append('show_diff_only', showOnlyDiff);
+    const showDiffOnly = document.getElementById('show-diff-only').checked;
+    formData.append('show_diff_only', showDiffOnly);
 
     const searchSignificantMutations = document.getElementById('search-significant-mutations').checked;
     // if true then should be only one sequence
@@ -206,9 +288,10 @@ function uploadAndPlot() {
         console.log(plotData)
 
         // Clear previous plot data
-        const plotDiv = document.getElementById('plot');
-        plotDiv.innerHTML = '';
+        const bindlinePlotDiv = document.getElementById('bindline-plot');
+        const bindingSitesPlotDiv = document.getElementById('binding-sites-plot');
         const traces = [];
+        const bindingSiteTraces = [];
 
         // Define a palette for each file, using distinct colors
         const fileColorPalettes = [
@@ -263,19 +346,11 @@ function uploadAndPlot() {
                     traces.push(highlightTrace);
                 }
 
-                // // Add short horizontal lines for non-None values in highest_values
-                // const highestValuesExp = plotData.highest_values[fileName];
-                // console.log(highestValuesExp)
-                //
-                // let highestValues = highestValuesExp?.[seqName];
-                // // get not null indexes
-                // const highestValuesIdx = highestValues.map((value, index) => value !== null ? index : null).filter(index => index !== null);
-                // const groupedRanges = splitRanges(highestValuesIdx, k);
                 const bindingSites = plotData.binding_sites[fileName]?.[seqName];
                 const groupedRanges = splitRanges(bindingSites);
                 groupedRanges.forEach(group => {
                     group.forEach(range => {
-                        //const [kmerSeq, kmerLength] = getKmerFromAlignedSeq(alignedSeq, k, index);
+                        const isFirst = range === group[0];
                         const [start, end, seq, isAdded] = range;
                         let line_design;
                             if (!isAdded) {
@@ -288,14 +363,13 @@ function uploadAndPlot() {
                             y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
                             mode: 'lines',
                             line: line_design,
-                            showlegend: true,
-                            name: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
-                            legendgroup: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
+                            showlegend: isFirst,
+                            name: `${seqName} (${fileName})`,
+                            legendgroup: `Binding Sites ${seqName} (${fileName})`,
                             // sequence in the segment, substring of the aligned sequence from start to end
                             hovertemplate: `${seq} (${start}-${end})<extra></extra>`,  // Customize hover tooltip
-                            visible: false  // Start hidden for toggle functionality
                         };
-                        traces.push(bindingSite);
+                        bindingSiteTraces.push(bindingSite);
                         let gaps = get_gaps(seq);
                         gaps.forEach(gap => {
                             const gapLine = {
@@ -303,55 +377,17 @@ function uploadAndPlot() {
                                 y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
                                 mode: 'lines',
                                 line: { color: 'black', width: 10 },
-                                name: `Binding Site ${start}-${end} Gap ${gap[0]}-${gap[1]} ${seqName} (${fileName})`,
-                                legendgroup: `Binding Site ${start}-${end} ${seqName} (${fileName})`,
+                                name: `${seqName} ${start}-${end} Gap ${gap[0]}-${gap[1]} (${fileName})`,
+                                legendgroup: `Binding Sites ${seqName} (${fileName})`,
                                 showlegend: false,
-                                visible: false  // Start hidden for toggle functionality
                             };
-                            traces.push(gapLine);
+                            bindingSiteTraces.push(gapLine);
                         });
                     });
                     segmentY += 1;
                 });
                 segmentY += 2;  // Add padding between sequences
                 seqIndex++;
-                // const gaps = plotData.gaps[fileName]?.[seqName];
-                // if (gaps) {
-                //     gaps.forEach(gap => {
-                //         const gapLine = {
-                //             x: [gap - 0.5, gap + 0.5],
-                //             y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
-                //             mode: 'lines',
-                //             line: { color: 'black', width: 10 },
-                //             name: `Binding Site ${gap} Gap ${seqName} (${fileName})`,
-                //             hovertemplate: "<extra></extra>",  // Customize hover tooltip
-                //             showlegend: false,
-                //             visible: false  // Start hidden for toggle functionality
-                //         };
-                //         traces.push(gapLine);
-                //     });
-                // }
-                //         // wherever the aligned seq is '-' add a gap
-                //         alignedSeq.split('').forEach((char, i) => {
-                //             if (char === '-' && i >= index && i < index + kmerLength) {
-                //                 const gap = {
-                //                     x: [i - 0.5, i + 0.5],
-                //                     y: [segmentY, segmentY],  // Stack segments vertically with unique y-positions
-                //                     mode: 'lines',
-                //                     line: { color: 'black', width: 10 },
-                //                     name: `Binding Site ${index} Gap ${seqName} (${fileName})`,
-                //                     hovertemplate: "<extra></extra>",  // Customize hover tooltip
-                //                     showlegend: false,
-                //                     visible: false  // Start hidden for toggle functionality
-                //                 };
-                //                 traces.push(gap);
-                //             }
-                //         });
-                //     });
-                //     segmentY += 1;
-                // });
-                // segmentY += 2;  // Add padding between sequences
-                // seqIndex++;
             }
 
             // Add max score line for each file
@@ -369,7 +405,7 @@ function uploadAndPlot() {
         }
 
         // Plot all traces
-        Plotly.newPlot(plotDiv, traces, {
+        Plotly.newPlot(bindlinePlotDiv, traces, {
             xaxis: {
                 title: 'Position'
             },
@@ -379,28 +415,49 @@ function uploadAndPlot() {
             hovermode: 'closest', // Tooltips only show when cursor is near a point
             showlegend: true
         });
+        // Plot binding sites
+        Plotly.newPlot(bindingSitesPlotDiv, bindingSiteTraces, {
+            xaxis: {
+                title: 'Position'
+            },
+            yaxis: {
+                title: 'Binding Site'
+            },
+            hovermode: 'closest', // Tooltips only show when cursor is near a point
+            showlegend: true
+        });
 
-        plotDiv.sequence_str = plotData.sequence_strs[plotData.ref_name];
+        const set_x_ticks = eventData => {
+            set_x_ticks_inner(eventData, bindlinePlotDiv);
+            set_x_ticks_inner(eventData, bindingSitesPlotDiv);
+        }
 
-        // Zoom event handling
-        const set_x_ticks = eventData => set_x_ticks_inner(eventData, plotDiv);
-
-        plotDiv.on('plotly_relayout', set_x_ticks);
-        plotDiv.on('plotly_doubleclick', set_x_ticks);
-        plotDiv.on('plotly_autosize', set_x_ticks);
-        // General event listener on the document to capture pointer events
-        document.addEventListener('click', function(eventData) {
-            // Get the parent button element
-            const button = eventData.target.closest('.modebar-btn');
-            if (button) {
-                // Get the tooltip text or class attribute to identify the button type
-                const buttonType = button.getAttribute('data-title') || button.getAttribute('class');
-                if (buttonType.includes('Reset axes') || buttonType.includes('Autoscale')) {
-                    set_x_ticks(null);
-                }
-            }
-        }, true);
+        for (let plotDiv of [bindlinePlotDiv, bindingSitesPlotDiv]) {
+            plotDiv.sequence_str = plotData.sequence_strs[plotData.ref_name];
+            // Zoom event handling
+            // plotDiv.on('plotly_afterplot', set_x_ticks);
+        }
         set_x_ticks(null);
+
+        let isSyncing = false;
+        const syncPlots = (sourcePlot, targetPlot) => {
+            sourcePlot.on('plotly_afterplot', () => {
+                // avoid infinite recursion
+                if (isSyncing) return; // Avoid recursion if already syncing
+                isSyncing = true; // Set the flag
+
+                // Sync the x-axis range between plots
+                Plotly.relayout(targetPlot, {'xaxis.range': sourcePlot.layout.xaxis.range})
+                .then(() => {
+                    isSyncing = false; // Reset the flag after relayout is complete
+                })
+                .catch(() => {
+                    isSyncing = false; // Reset the flag in case of an error
+                });
+            })
+        };
+        syncPlots(bindlinePlotDiv, bindingSitesPlotDiv);
+        syncPlots(bindingSitesPlotDiv, bindlinePlotDiv);
     })
     .catch(error => {
         //log stacktrace
@@ -428,43 +485,6 @@ function get_gaps(aligned_seq) {
         }
     }
     return gaps;
-}
-
-function toggleView() {
-    const plotDiv = document.getElementById('plot');
-    const traces = plotDiv.data;
-    const showHighestOnly = traces.some(trace => trace.visible === true && trace.name && trace.name.startsWith('Binding Site'));
-
-    traces.forEach(trace => {
-        if (trace.name && trace.name.startsWith('Binding Site')) {
-            trace.visible = !showHighestOnly;  // Toggle visibility of highest values
-        } else {
-            trace.visible = showHighestOnly;  // Toggle visibility of scores
-        }
-    });
-    // Capture the current x-axis range before updating
-    const currentXRange = plotDiv.layout.xaxis.range;
-    const visibleYValues = [];
-    traces.forEach(trace => {
-        if (trace.visible) {
-            trace.x.forEach((xValue, index) => {
-                if (xValue >= currentXRange[0] && xValue <= currentXRange[1]) {
-                    visibleYValues.push(trace.y[index]);
-                }
-            });
-        }
-    });
-    // Calculate the min and max of visible y-values to set y-axis range
-    const minY = Math.min(...visibleYValues);
-    const maxY = Math.max(...visibleYValues);
-
-    // Update the plot with the same x-axis range
-    Plotly.react(plotDiv, traces, {
-        xaxis: { title: 'Position', range: currentXRange },  // Use the current x-axis range
-        yaxis: { visible: showHighestOnly, range: showHighestOnly ? [] : [minY - 1, maxY + 1] }
-    });
-
-    set_x_ticks_inner(null, plotDiv);
 }
 
 function set_x_ticks_inner(eventData, plotDiv) {
@@ -569,7 +589,6 @@ function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', () => loadSequences());
 document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow());
-document.getElementById('toggle-view').addEventListener('click', () => toggleView());
 // Handle uploading and plotting data from multiple E-Score files
 document.getElementById('upload-and-plot').addEventListener('click', () => uploadAndPlot());
 
@@ -603,7 +622,6 @@ function hideThresholds() {
 
     for (let score in scores) {
         let thresholdDiv = document.getElementById(`${scores[score]}_threshold`);
-        console.log(fileType, score, thresholdDiv);
         if (fileType === scores[score]) {
             thresholdDiv.style.display = "flex";
         } else {
