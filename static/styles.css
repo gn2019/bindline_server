@@ -73,3 +73,7 @@ th {
 .ref input {
     background-color: yellow;
 }
+
+.ref button.set-ref-button {
+    display: none;
+}
