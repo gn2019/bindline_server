@@ -243,6 +243,22 @@ def find_binding_sites():
 
     if request.form['show_diff_only'] == 'true':
         show_diff_only(binding_sites, ref_name)
+        # remove the sequences that have no binding sites except of the ref
+        for file_name, bss in binding_sites.items():
+            for seq_name, bs in bss.items():
+                if seq_name != ref_name and len(bs) == 0:
+                    del identified_scores[file_name][seq_name]
+                    del identified_binding_sites[file_name][seq_name]
+                    del gaps[file_name][seq_name]
+            binding_sites[file_name] = {k: v for k, v in bss.items() if v and k != ref_name}
+            if not binding_sites[file_name]:
+                del identified_scores[file_name]
+                del identified_binding_sites[file_name]
+                del gaps[file_name]
+                del max_scores[file_name]
+        binding_sites = {k: v for k, v in binding_sites.items() if v}
+
+
 
     plot_data = {
         'aligned_scores': identified_scores,
@@ -493,16 +509,17 @@ def upload_files():
 
     return jsonify(plot_data)
 
+
 def show_diff_only(binding_sites, ref_name):
     for protein_file in binding_sites:
         for input_seq in binding_sites[protein_file]:
             if input_seq != ref_name:
                 ref = binding_sites[protein_file][ref_name]
                 com = binding_sites[protein_file][input_seq]
-                added = [bs for bs in com if bs not in ref]
-                removed = [(bs[0], bs[1], bs[2], False) for bs in ref if bs not in com]  # false means it removed
+                added = [bs for bs in com if not does_equivalent_bs_exist(bs, ref)]
+                removed = [(bs[0], bs[1], bs[2], False) for bs in ref if not does_equivalent_bs_exist(bs, com)]  # false means it removed
                 binding_sites[protein_file][input_seq] = added + removed
-        # Delete the refrence bs dict
+        # Delete the reference bs dict
         binding_sites[protein_file][ref_name] = []
 
 
