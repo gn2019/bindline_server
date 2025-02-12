@@ -207,12 +207,15 @@ function uploadAndPlot() {
         return;
     }
     if (!validateConditions(selectedSequences)) return;
+    formData.forEach((value, key) => console.log(key, value));
+
 
     fetch('/upload', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(plotData => handlePlotData(plotData))
         .catch(handleError);
 }
+
 
 /** Helper function to gather all selected sequences */
 function gatherSelectedSequences() {
@@ -312,28 +315,40 @@ function handlePlotData(plotData) {
         alert(plotData.error);
         return;
     }
+    console.log(plotData);  // TODO: remove
 
-    const bindlinePlotDiv = document.getElementById('bindline-plot');
-    const bindingSitesPlotDiv = document.getElementById('binding-sites-plot');
-    const traces = createTraces(plotData);
-    const [bindingSiteTraces, yLabels] = createBindingSiteTraces(plotData);
+    const plotComponents = {
+        bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout },
+        bindingSites: { id: 'binding-sites-plot', traceFunc: createBindingSiteTraces, layoutFunc: getBindingSitesPlotLayout },
+        allMutants: { id: 'all-mutants-plot', traceFunc: createAllMutantsTraces, layoutFunc: getAllMutantsPlotLayout }
+    };
 
-    // Render plots
-    Plotly.newPlot(bindlinePlotDiv, traces, getBindlinePlotLayout());
-    Plotly.newPlot(bindingSitesPlotDiv, bindingSiteTraces, getBindingSitesPlotLayout(yLabels));
+    // Loop through each plot, generate traces, layout, and render
+    for (const component of Object.values(plotComponents)) {
+        const div = document.getElementById(component.id);
+        const [traces, metadata] = component.traceFunc(plotData);
+        const layout = component.layoutFunc(metadata);
 
-    syncPlots(bindlinePlotDiv, bindingSitesPlotDiv);
+        Plotly.newPlot(div, traces, layout);
+        div.sequence_str = plotData.sequence_strs[plotData.ref_name];
+        div.on('plotly_afterplot', () => set_x_ticks(div));
 
-    for (let plotDiv of [bindlinePlotDiv, bindingSitesPlotDiv]) {
-        plotDiv.sequence_str = plotData.sequence_strs[plotData.ref_name];
-        plotDiv.on('plotly_afterplot', eventData => set_x_ticks(plotDiv));
+        component.div = div;
+        component.traces = traces;
+        component.metadata = metadata;
+        component.layout = layout;
     }
+
+    // Extract divs from plotComponents and pass them to syncPlots
+    syncPlots(Object.values(plotComponents).map(component => component.div));
 }
+
 
 /** Handle and log errors */
 function handleError(error) {
     console.error('Error:', error);
 }
+
 
 /** Create traces for bindline plot */
 function createTraces(plotData) {
@@ -344,8 +359,9 @@ function createTraces(plotData) {
         const colorPalette = colorPalettes[fileIndex % colorPalettes.length];
 
         Object.entries(fileScores).forEach(([seqName, alignedScores], seqIndex) => {
+            const alignedSeq = plotData.aligned_seqs[seqName];
             const trace = {
-                x: Array.from({length: alignedScores.length}, (_, i) => i),
+                x: plotData.aligned_positions[seqName],
                 y: alignedScores,
                 mode: 'lines',
                 name: `${seqName} (${fileName})`,
@@ -359,10 +375,9 @@ function createTraces(plotData) {
             const highestVals = plotData.highest_values[fileName]?.[seqName];
             if (!highestVals) return;
 
-            const alignedSeq = plotData.aligned_seqs[seqName];
             const k = alignedSeq.length - alignedScores.length + 1;
             const highlightTrace = {
-                x: Array.from({length: alignedScores.length}, (_, i) => i),
+                x: plotData.aligned_positions[seqName],
                 y: highestVals,
                 mode: 'markers',
                 showlegend: false,  // Hide max score line from legend
@@ -385,7 +400,7 @@ function createTraces(plotData) {
         };
         traces.push(maxScoreLine);
     });
-    return traces;
+    return [traces, null];
 }
 
 function createBindingSiteTraces(plotData) {
@@ -403,7 +418,7 @@ function createBindingSiteTraces(plotData) {
             }
 
             bindingSites.forEach(range => {
-                const [start, end, seq, isAdded] = range;
+                const [start, end, seq, bsStart, bsEnd, isAdded] = range;
 
                 // Add the binding site trace
                 bindingSiteTraces.push({
@@ -416,21 +431,42 @@ function createBindingSiteTraces(plotData) {
                     },
                     name: yLabel,
                     legendgroup: yLabel,
-                    hovertemplate: `${seq} (${start}-${end})<extra></extra>`, // Tooltip
+                    hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`, // Tooltip
                     showlegend: false // Show the legend only for the first trace of a file/sequence
                 });
 
-                // Add gaps in the range
-                get_gaps(seq).forEach(gap => {
+                const gaps = plotData.gaps[fileName][seqName];
+                gaps.forEach(gap => {
+                    const [gapStart, gapEnd] = gap;
                     bindingSiteTraces.push({
-                        x: [start + gap[0] - 0.25, start + gap[1] + 0.25],
+                        x: [gapStart - 0.25, gapEnd + 0.25],
                         y: [yLabel, yLabel],
                         mode: 'lines',
                         line: {
                             color: 'rgba(0, 0, 0, 0.5)', // Black color for gaps with transparency
                             width: 6
                         },
-                        showlegend: false
+                        showlegend: false,
+                        // disable hover for gaps
+                        hoverinfo: 'skip'
+                    });
+                });
+
+                const insertions = plotData.insertions[fileName][seqName];
+                insertions.forEach(insertion => {
+                    // add annotation for insertion
+                    const [pos, ins] = insertion;
+                    bindingSiteTraces.push({
+                        x: [pos],
+                        y: [yLabel],
+                        mode: 'markers',
+                        marker: {
+                            symbol: 'triangle-up',
+                            size: 10,
+                            color: 'rgba(0, 0, 0, 0.5)',
+                        },
+                        showlegend: false,
+                        hovertemplate: `${ins}<extra></extra>`,
                     });
                 });
             });
@@ -459,6 +495,74 @@ function getBindlinePlotLayout() {
     };
 }
 
+function createAllMutantsTraces(plotData) {
+    const nucleotideColors = { "A": "green", "C": "blue", "G": "orange", "T": "red" };
+    // Shape mapping for reference nucleotides
+    const nucleotideShapes = { "A": "square", "C": "circle", "G": "triangle-up", "T": "diamond" };
+    // Prepare traces
+    let traces = [];
+    let lines = [];
+
+    Object.entries(plotData.mutants_effect).forEach(([position, effects]) => {
+        let refNuc = plotData.sequence_strs[plotData.ref_name][position]
+
+        Object.entries(effects).forEach(([nuc, effect]) => {
+            // Add scatter point
+            traces.push({
+                x: [parseInt(position)],
+                y: [effect],
+                mode: "markers",
+                marker: { color: nucleotideColors[nuc], symbol: nucleotideShapes[refNuc], size: 4, alpha: 0.8 },
+                name: `${nuc} at ${position}`,
+                showlegend: false,
+            });
+
+            // Add vertical line to zero
+            lines.push({
+                x: [parseInt(position), parseInt(position)],
+                y: [0, effect],
+                mode: "lines",
+                line: { color: "black", width: 1, alpha: 0.5 },
+                showlegend: false,
+                hoverinfo: "skip",  // Prevents tooltips from appearing
+                hovertemplate: null,  // no tooltip
+            });
+        });
+    });
+
+    // add legend of the ref symbols and the colors
+    const shapeTraces = Object.keys(nucleotideShapes).map(nucleotide => ({
+        x: [null], y: [null], mode: "markers",
+        marker: { symbol: nucleotideShapes[nucleotide], color: "rgba(0,0,0,0)", opacity: 1, size: 12,
+                  line: { color: "black", width: 2 }},
+        name: `Ref nucleotide: ${nucleotide}`
+    }));
+    const colorTraces = Object.keys(nucleotideColors).map(nucleotide => ({
+        x: [null], y: [null], mode: "markers",
+        marker: { symbol: "circle", color: nucleotideColors[nucleotide], size: 12 },
+        name: `Mutant nucleotide: ${nucleotide}`
+    }));
+
+    // Combine all traces
+    const finalTraces = [...lines, ...traces, ...shapeTraces, ...colorTraces];
+    return [finalTraces, null];
+}
+
+function getAllMutantsPlotLayout() {
+    const layout = {
+        xaxis: { title: "Position", tickmode: "linear" },
+        yaxis: { title: "Effect (ΔScore)" },
+        template: "plotly_white"
+    };
+    return layout;
+    return {
+        xaxis: { title: 'Position' },
+        yaxis: { title: 'Score' },
+        hovermode: 'closest',
+        showlegend: true,
+    };
+}
+
 function getBindingSitesPlotLayout(yLabels) {
     const baseHeight = 300; // Minimum height for axes and margins when there are no labels
     const labelHeight = 30; // Height allocated per label
@@ -479,7 +583,43 @@ function getBindingSitesPlotLayout(yLabels) {
     };
 }
 
-function syncPlots(plot1, plot2) {
+function syncPlots(plots) {
+    let isSyncing = false;
+
+    // Function to sync all plots to the same x-axis range
+    const syncRange = (sourcePlot) => {  // TODO: called too many times
+        if (isSyncing) return;
+        isSyncing = true;
+
+        try {
+            const xRange = sourcePlot.layout.xaxis.range;
+
+            // Update all plots with the same x-axis range
+            plots.forEach(plot => {
+                console.log(`sync ${sourcePlot.id} -> ${plot.id}`);
+                if (plot !== sourcePlot) {
+                    Plotly.relayout(plot, { 'xaxis.range': xRange })
+                        .catch(error => {
+                            console.error(`Error syncing plot ${plot.id}:`, error);
+                        });
+                }
+            });
+        } catch (error) {
+            console.error('Error during syncing process:', error);
+        } finally {
+            isSyncing = false;
+        }
+    };
+
+    // Attach the same sync handler to all plots
+    plots.forEach(plot => {
+        plot.on('plotly_afterplot', () => syncRange(plot));
+    });
+}
+
+
+
+function syncPlofts(plot1, plot2) {  // TODO: remove
     let isSyncing = false;
     plot1.on('plotly_afterplot', eventData => {
         if (isSyncing) return;
@@ -536,6 +676,7 @@ function set_x_ticks(plotDiv) {
     xEnd = Math.min(plotDiv.sequence_str.length, Math.floor(xEnd + 1));
 
     if (xEnd - xStart < 200) {
+        console.log(`Setting letters to x-axis for ${plotDiv.id}`)
         const annotations = [];
         const sequence = plotDiv.sequence_str.substring(xStart, xEnd);
         for (let i = 0; i < xEnd - xStart; i++) {
@@ -582,7 +723,7 @@ function getKmerFromAlignedSeq(aligned_seq, k, start = 0) {
     for (let i = start; i < aligned_seq.length && kmer.length < k; i++) {
         length++;
         if (aligned_seq[i] !== '-') {
-            kmer += aligned_seq[i];
+            kmer += aligned_seq[i].toUpperCase();
         }
     }
     return [kmer, length];
@@ -652,3 +793,29 @@ for (let threshold of ['escore', 'zscore', 'iscore', 'ranks']) {
     toggleSliderAndInput(`enable_${threshold}_threshold`, `${threshold}_threshold_slider`, `${threshold}_threshold_input`);
     syncSliderAndInput(`${threshold}_threshold_slider`, `${threshold}_threshold_input`);
 }
+
+function uploaddAndPlot() {
+    const formData = new FormData(document.getElementById('upload-form'));
+    formData.append('sequences', JSON.stringify({
+        "a":"AAAATTTTGGGGCCCCAAAA",
+        "b":"AAAATTTTGGGGTCCCCAAAA",
+        "c":"AAAATTTTGGGCCCCAAAA",
+        "d":"AAAATTTTGGGGCCTTTCCAAAA",
+        "e":"AAAATTGGGAAAA",
+    }));
+    formData.append('ref_name', "a");
+    formData.append('show_diff_only', 'false');
+    formData.append('search_significant_mutations', 'false');
+    formData.append('search_binding_sites', 'false');
+    formData.append('escore_threshold_input', '-5');
+    formData.append('e_score_0', "IRF1_Normalized_7mers_1111111.txt");
+    formData.forEach((value, key) => console.log(key, value));
+
+    fetch('/upload', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(plotData => handlePlotData(plotData))
+        .catch(handleError);
+}
+
+
+// uploadAndPlot();
