@@ -11,12 +11,20 @@
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 	<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>BindLine</h1>
 
-        <form id="upload-form">
+        <!-- Toggle Button for Collapsible Form -->
+        <button class="btn btn-outline-primary btn-sm mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#upload-form-container">
+            Toggle Form
+        </button>
+
+        <!-- Collapsible Form Container -->
+        <div id="upload-form-container" class="collapse show">
+            <form id="upload-form">
             <table class="table table-borderless align-middle mb-3">
                 <tr>
                     <td><label for="e_score" class="form-label mb-0">E-Score File(s):</label></td>
@@ -111,8 +119,8 @@
             </div>
 
             <div class="form-check form-check-inline">
-                            <input class="form-check input" type="checkbox" id="show-diff-only" name="show-diff-only">
-                            <label class="form-check label" for="show-diff-only">Show diff only</label>
+                <input class="form-check input" type="checkbox" id="show-diff-only" name="show-diff-only">
+                <label class="form-check label" for="show-diff-only">Show diff only</label>
             </div>
             <div class="d-flex align-items-center mb-2">
                 <button class="btn btn-secondary btn-sm me-2" type="button" id="add-sequence-row">Add Sequence</button>
@@ -134,10 +142,67 @@
                 </table>
             </div>
         </form>
+        </div>
 
-        <div id="bindline-plot"></div>
-        <div id="binding-sites-plot"></div>
-        <div id="all-mutants-plot"></div>
+        <div id="global-loading" style="display: none; text-align: center; font-size: 16px; font-weight: bold;">
+            Loading Data<span id="loading-dots">...</span>
+        </div>
+
+        <!-- Radio buttons for selecting view -->
+        <div class="d-flex mb-3">
+            <div class="form-check me-3">
+                <input class="form-check-input" type="radio" name="view-option" id="view-stacked" value="stacked" checked>
+                <label class="form-check-label" for="view-stacked">Stacked View</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="view-option" id="view-tabbed" value="tabbed">
+                <label class="form-check-label" for="view-tabbed">Tabbed View</label>
+            </div>
+        </div>
+
+
+         <!-- Shared Plot Containers (Rendered Once) -->
+        <div id="plots-container">
+            <div id="bindline-container" class="plot-container">
+                <div id="bindline-plot"></div>
+                <div id="bindline-plot-loading" class="loading-spinner"></div>
+            </div>
+
+            <div id="binding-sites-container" class="plot-container">
+                <div id="binding-sites-plot"></div>
+                <div id="binding-sites-plot-loading" class="loading-spinner"></div>
+            </div>
+
+            <div id="all-mutants-container" class="plot-container">
+                <div id="all-mutants-plot"></div>
+                <div id="all-mutants-plot-loading" class="loading-spinner"></div>
+            </div>
+        </div>
+
+        <!-- Stacked View -->
+        <div id="plot-stacked">
+            <div id="stacked-container"></div>
+        </div>
+
+        <!-- Tabs View -->
+        <div id="plot-tabs" style="display: none;">
+            <ul class="nav nav-tabs" id="plot-tabs-nav">
+                <li class="nav-item" id="bindline-tab-nav" style="display: none">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#bindline-tab">BindLine</a>
+                </li>
+                <li class="nav-item" id="binding-sites-tab-nav" style="display: none">
+                    <a class="nav-link" data-bs-toggle="tab" href="#binding-sites-tab">Binding Sites</a>
+                </li>
+                <li class="nav-item" id="all-mutants-tab-nav" style="display: none">
+                    <a class="nav-link" data-bs-toggle="tab" href="#all-mutants-tab">All Mutants</a>
+                </li>
+            </ul>
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="bindline-tab"></div>
+                <div class="tab-pane fade" id="binding-sites-tab"></div>
+                <div class="tab-pane fade" id="all-mutants-tab"></div>
+            </div>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>

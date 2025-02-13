@@ -29,7 +29,7 @@ function loadExistingFiles() {
         });
 }
 
-function loadSequences() {
+async function loadSequences() {
     const fastaFile = document.getElementById('fasta').files[0];
     const existingFastaSelect = document.getElementById('existing_fasta');
 
@@ -43,7 +43,7 @@ function loadSequences() {
         return;
     }
 
-    fetch('/sequences', {
+    await fetch('/sequences', {
         method: 'POST',
         body: formData
     })
@@ -189,15 +189,24 @@ function addSequenceRow(name = '', sequence = '') {
     }
 }
 
-function uploadAndPlot() {
+async function uploadAndPlot() {
+    showGlobalLoading(); // Show loading animation before request
+
     const formData = new FormData(document.getElementById('upload-form'));
-    const selectedSequences = gatherSelectedSequences();
+    // if no rows of sequences, load them
+    if (!$('#sequence-tbody tr').length) {
+        await loadSequences();
+        await new Promise(requestAnimationFrame); // Wait for the UI to update
+        console.log('loaded');
+    }
+    let selectedSequences = gatherSelectedSequences();
     if (Object.keys(selectedSequences).length === 0) {
-        loadSequences();
+        alert('Please select at least one sequence.');
+        hideGlobalLoading();
         return;
     }
 
-    const refName = getReferenceName();
+    const refName = getReferenceName(); // Now this will run after sequences are loaded
     if (!refName) return;
 
     try {
@@ -210,7 +219,7 @@ function uploadAndPlot() {
     formData.forEach((value, key) => console.log(key, value));
 
 
-    fetch('/upload', { method: 'POST', body: formData })
+    await fetch('/upload', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(plotData => handlePlotData(plotData))
         .catch(handleError);
@@ -231,7 +240,7 @@ function gatherSelectedSequences() {
 
 /** Helper function to get the reference name */
 function getReferenceName() {
-    let refRow = getRefRow()
+    let refRow = getRefRow();
     if (!refRow) {
         setFirstAsRef();
         refRow = getRefRow();
@@ -309,43 +318,79 @@ function validateConditions(selectedSequences) {
     return true;
 }
 
+
 /** Handle plot data and render plots */
-function handlePlotData(plotData) {
+async function handlePlotData(plotData) {
+    hideGlobalLoading();
+
     if (plotData.error) {
         alert(plotData.error);
         return;
     }
-    console.log(plotData);  // TODO: remove
+    console.log(plotData); // TODO: remove
 
     const plotComponents = {
         bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout },
-        bindingSites: { id: 'binding-sites-plot', traceFunc: createBindingSiteTraces, layoutFunc: getBindingSitesPlotLayout },
-        allMutants: { id: 'all-mutants-plot', traceFunc: createAllMutantsTraces, layoutFunc: getAllMutantsPlotLayout }
+        bindingSites: { id: 'binding-sites-plot', checkFunc: plotData => plotData.binding_sites, traceFunc: createBindingSiteTraces, layoutFunc: getBindingSitesPlotLayout },
+        allMutants: { id: 'all-mutants-plot', checkFunc: plotData => plotData.mutants_effect, traceFunc: createAllMutantsTraces, layoutFunc: getAllMutantsPlotLayout }
     };
-
-    // Loop through each plot, generate traces, layout, and render
-    for (const component of Object.values(plotComponents)) {
-        const div = document.getElementById(component.id);
-        const [traces, metadata] = component.traceFunc(plotData);
-        const layout = component.layoutFunc(metadata);
-
-        Plotly.newPlot(div, traces, layout);
-        div.sequence_str = plotData.sequence_strs[plotData.ref_name];
-        div.on('plotly_afterplot', () => set_x_ticks(div));
-
-        component.div = div;
-        component.traces = traces;
-        component.metadata = metadata;
-        component.layout = layout;
+    // leave only the plots that are checked
+    for (const [key, component] of Object.entries(plotComponents)) {
+        const tabNavigation = document.getElementById(component.id.replace('-plot', '-tab-nav'));
+        if (component.checkFunc && !component.checkFunc(plotData)) {
+            delete plotComponents[key];
+            tabNavigation.style.display = 'none';
+        } else {
+            tabNavigation.style.display = 'block';
+        }
     }
 
-    // Extract divs from plotComponents and pass them to syncPlots
-    syncPlots(Object.values(plotComponents).map(component => component.div));
+
+    function toggleLoading(divId, show) {
+        const spinner = document.getElementById(`${divId}-loading`);
+        console.log(spinner, spinner.id, show, spinner.style.display);
+        if (spinner) {
+            spinner.style.display = show ? 'block' : 'none';
+        }
+    }
+
+    function plotComponent(component) {
+        const div = document.getElementById(component.id);
+        div.innerHTML = '';
+        toggleLoading(component.id, true); // Show spinner
+
+        // Use setTimeout to break out of the current execution cycle and allow UI to refresh
+        setTimeout(async () => {
+            const [traces, metadata] = component.traceFunc(plotData);
+            const layout = component.layoutFunc(metadata);
+
+            await Plotly.newPlot(div, traces, layout);
+
+            toggleLoading(component.id, false); // Hide spinner
+
+            div.sequence_str = plotData.sequence_strs[plotData.ref_name];
+            div.on('plotly_afterplot', () => set_x_ticks(div));
+
+            component.div = div;
+            component.traces = traces;
+            component.metadata = metadata;
+            component.layout = layout;
+        }, 0);
+    }
+
+    // Run all plots asynchronously without blocking UI updates
+    Object.values(plotComponents).forEach(plotComponent);
+
+    // Since plotting is now separate, syncing should run after a slight delay
+    setTimeout(() => {
+        syncPlots(Object.values(plotComponents).map(component => component.div));
+    }, 500);
 }
 
 
 /** Handle and log errors */
 function handleError(error) {
+    hideGlobalLoading();
     console.error('Error:', error);
 }
 
@@ -372,7 +417,7 @@ function createTraces(plotData) {
             traces.push(trace);
 
             // Highlight the highest values
-            const highestVals = plotData.highest_values[fileName]?.[seqName];
+            const highestVals = plotData.highest_values?.[fileName]?.[seqName];
             if (!highestVals) return;
 
             const k = alignedSeq.length - alignedScores.length + 1;
@@ -775,6 +820,71 @@ function hideThresholds() {
     }
 }
 
+let loadingInterval;
+
+function showGlobalLoading() {
+    const loadingDiv = document.getElementById("global-loading");
+    const loadingDots = document.getElementById("loading-dots");
+
+    if (!loadingDiv || !loadingDots) return;
+
+    loadingDiv.style.display = "block"; // Show loading message
+    window.scrollTo({ top: 0, behavior: "smooth" }); // Scroll to top smoothly
+
+    let dotCount = 0;
+
+    // Animate the dots every 500ms
+    loadingInterval = setInterval(() => {
+        dotCount = (dotCount + 1) % 4; // Cycle through 0,1,2,3
+        loadingDots.textContent = ".".repeat(dotCount); // Update dots
+    }, 500);
+}
+
+function hideGlobalLoading() {
+    clearInterval(loadingInterval); // Stop animation
+    const loadingDiv = document.getElementById("global-loading");
+    if (loadingDiv) loadingDiv.style.display = "none"; // Hide message
+}
+
+
+document.addEventListener("DOMContentLoaded", function () {
+    const viewModeRadio = document.querySelectorAll('input[name="view-option"]');
+    const stackedContainer = document.getElementById("stacked-container");
+    const plotTabs = document.getElementById("plot-tabs");
+    const plotStacked = document.getElementById("plot-stacked");
+
+    const plotDivs = document.querySelectorAll(".plot-container");
+
+    // Initialize with stacked view
+    plotDivs.forEach(plotDiv => {
+        stackedContainer.appendChild(plotDiv);
+    })
+
+    // Handle View Mode Switching
+    viewModeRadio.forEach(function (radio) {
+        radio.addEventListener("change", function () {
+            if (this.id === "view-tabbed") {
+                // Move plots to tab content
+                plotDivs.forEach(plotDiv => {
+                    const tabId = plotDiv.id.replace("-container", "-tab");
+                    const tabContent = document.getElementById(tabId);
+                    tabContent.appendChild(plotDiv);
+                });
+                plotStacked.style.display = "none";
+                plotTabs.style.display = "block";
+            } else if (this.id === 'view-stacked') {
+                // Move plots back to stacked view
+                plotDivs.forEach(plotDiv => {
+                    stackedContainer.appendChild(plotDiv);
+                });
+                plotTabs.style.display = "none";
+                plotStacked.style.display = "block";
+            }
+        });
+    });
+});
+
+
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', () => loadSequences());
@@ -794,24 +904,23 @@ for (let threshold of ['escore', 'zscore', 'iscore', 'ranks']) {
     syncSliderAndInput(`${threshold}_threshold_slider`, `${threshold}_threshold_input`);
 }
 
-function uploaddAndPlot() {
+async function updloadAndPlot() {
+    showGlobalLoading(); // Show loading animation before request
+
     const formData = new FormData(document.getElementById('upload-form'));
     formData.append('sequences', JSON.stringify({
-        "a":"AAAATTTTGGGGCCCCAAAA",
-        "b":"AAAATTTTGGGGTCCCCAAAA",
-        "c":"AAAATTTTGGGCCCCAAAA",
-        "d":"AAAATTTTGGGGCCTTTCCAAAA",
-        "e":"AAAATTGGGAAAA",
+        "WT":"AAAGCTGCTCTCAGTTTTTCAAGTCACACACACACACACACACACACACTCACACACACGGGTGGGGGAGTGTCTGTCATGGACACAGCTGTGTCAGTGTGGTTGCTCAGAGATCTGAGTTGCTCTAGCACTAGGTGCAGTTTATTTCACAGCCCTAAAGAGATTTACGGCTGTTTTTTCTTCATTGGGGCCAAACATGGGGCCTGATAGGGAGGGCGTTGCACCAAAGGCAACAGAGACTACCATGAAAGTCCCTACAAACCTAACCTGAGCAGAGGACTGAAGAATGCAGAAAGGGACACTCAGGTAACAGACCATGGGACATAACAGCCATCTGTTGCTGGCCTTGGGTCTGATAAGGTCTCAGGGGCTGAAGGTGTAGGTTCAAAACACCTGGATCTTCGGAGCTCTGAGAGTACTTCATGCTATCACCACAAGCAAGGGGTCAGTTTTCTGCATGTCCTTGCTTGTCATGTGCCTAGGAATCCCACAGCCAGCTCATCCACTAAGCAGGGATAAGTTGACTCTGGGGCACCTGGAGGACCTGTTCTAGACCTCCACGTCCTAGCTCCGTTATTTCCATCACCTGCAGGATTGCACACTGTCACCCCCCCCCCAACACCCCCAGACGACGCGTCTTGCGTCTCAGGGGCACACCACTGGCTTCTGTGTCGCCCACTCCTCTCCACTCCCCACAGGCTCATCCGGACGATCCACGTGCAGCTCGACCGGGGGTTGGCGCCGCACCTCGAGCCCGGCGCGTCTGGCCGGAGCTTTCTGGGGACCCGAACCCCCCAACCCCCGCGAGAGGGCGGCATCTGGCGACCGCGGGTCGGGCAGGGGGGCGTCCTAAAGTCCCCTGCGGTGCAGAGACGTTGCGGCCGGCTGCCACACAAAGGCGGCGGCGGGAAGGCGGGGCGGGGCGGGCCGGGGGGCGGGGGAGGCAGGAAGGGGCGGGGGCGGCGGCGGCGATAAAGCCCCCGCGCGGCCCGGCCGGCTA",
     }));
-    formData.append('ref_name', "a");
+    formData.append('ref_name', "WT");
+    formData.append('file_type', 'zscore');
     formData.append('show_diff_only', 'false');
-    formData.append('search_significant_mutations', 'false');
+    formData.append('search_significant_mutations', 'true');
     formData.append('search_binding_sites', 'false');
-    formData.append('escore_threshold_input', '-5');
+    formData.append('ranks_threshold_input', '99');
     formData.append('e_score_0', "IRF1_Normalized_7mers_1111111.txt");
     formData.forEach((value, key) => console.log(key, value));
 
-    fetch('/upload', { method: 'POST', body: formData })
+    await fetch('/upload', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(plotData => handlePlotData(plotData))
         .catch(handleError);
