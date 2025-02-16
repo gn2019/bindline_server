@@ -166,8 +166,8 @@ def get_sequences():
     return jsonify({'sequences': sequences})
 
 
-def get_score_file(e_score_path, file_type):
-    with open(e_score_path, 'r') as f:
+def get_score_file(score_path, file_type):
+    with open(score_path, 'r') as f:
         if file_type == 'escore':
             score = bindline.UniProbeEScoreFile(f.read())
         elif file_type == 'zscore':
@@ -264,39 +264,33 @@ def find_binding_sites():
     aligned_seqs = {}
     aligned_positions = {}
 
-    for e_score_file, table in identified_tables.items():
+    for score_file, table in identified_tables.items():
         scores_dict = table.score_seqs(sequences)
-        max_scores[e_score_file] = table.max_score()
-        curr_aligned_scores = {}
+        max_scores[score_file] = table.max_score()
+        identified_scores[score_file] = curr_aligned_scores = {}
         ref_seq, ref_scores = scores_dict[ref_name]
 
-        curr_binding_sites, curr_gaps, curr_insertions = {}, {}, {}
+        binding_sites[score_file] = curr_binding_sites = {}
+        gaps[score_file] = curr_gaps = {}
+        insertions[score_file] = curr_insertions = {}
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             # curr_aligned_scores[name] = align_sequences(ref_scores, sequence_scores)
             aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = (
                 align_scores(ref_seq, sequence_str, sequence_scores))
             curr_binding_sites[name], curr_gaps[name], curr_insertions[name] = (
-                get_binding_sites(identified_binding_sites[e_score_file][name],
+                get_binding_sites(identified_binding_sites[score_file][name],
                                   aligned_seqs[name], table.mer, aligned_positions[name]))
-
-        identified_scores[e_score_file] = curr_aligned_scores
-        binding_sites[e_score_file], gaps[e_score_file], insertions[e_score_file] = curr_binding_sites, curr_gaps, curr_insertions
 
     if request.form['show_diff_only'] == 'true':
         show_diff_only(binding_sites, ref_name)
         # remove the sequences that have no binding sites except of the ref
-        for file_name, bss in binding_sites.items():
+        for file, bss in binding_sites.items():
             for seq_name, bs in bss.items():
                 if seq_name != ref_name and len(bs) == 0:
-                    del identified_scores[file_name][seq_name]
-                    del identified_binding_sites[file_name][seq_name]
-                    del gaps[file_name][seq_name]
-            binding_sites[file_name] = {k: v for k, v in bss.items() if v and k != ref_name}
-            if not binding_sites[file_name]:
-                del identified_scores[file_name]
-                del identified_binding_sites[file_name]
-                del gaps[file_name]
-                del max_scores[file_name]
+                    del identified_scores[file][seq_name], identified_binding_sites[file][seq_name], gaps[file][seq_name]
+            binding_sites[file] = {k: v for k, v in bss.items() if v and k != ref_name}
+            if not binding_sites[file]:
+                del identified_scores[file], identified_binding_sites[file], gaps[file], max_scores[file]
         binding_sites = {k: v for k, v in binding_sites.items() if v}
 
     plot_data = {
@@ -356,15 +350,15 @@ def get_all_mutants(name, sequence):
     return mutants
 
 
-def get_escore_files(request):
+def get_score_files(request):
     if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
         # save them (it's a list of files)
-        e_score_files = request.files.getlist('e_score')
-        for e_score_file in e_score_files:
-            e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file.filename)
-            e_score_file.save(e_score_path)
+        score_files = request.files.getlist('e_score')
+        for score_file in score_files:
+            score_path = os.path.join(app.config['ESCORE_FOLDER'], score_file.filename)
+            score_file.save(score_path)
         # take their names
-        return [f.filename for f in e_score_files]
+        return [f.filename for f in score_files]
     else:
         return [request.form[var] for var in request.form if var.startswith('e_score_')]
 
@@ -389,7 +383,7 @@ def find_significant_mutations():
 
     ref_name = request.form['ref_name']
     sequences = get_all_mutants(*next(iter(sequences.items())))
-    e_score_files = get_escore_files(request)
+    score_files = get_score_files(request)
 
     aligned_scores = {}
     aligned_seqs = {}
@@ -399,14 +393,14 @@ def find_significant_mutations():
     binding_sites = {}
     gaps, insertions = {}, {}
 
-    for e_score_file in e_score_files:
-        e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
+    for score_file in score_files:
+        score_path = os.path.join(app.config['ESCORE_FOLDER'], score_file)
 
-        name, motif, table = get_score_table(e_score_path, file_type)
+        name, motif, table = get_score_table(score_path, file_type)
         scores_dict = table.score_seqs(sequences)
 
-        max_scores[e_score_file] = table.max_score()
-        curr_aligned_scores = {}
+        max_scores[score_file] = table.max_score()
+        aligned_scores[score_file] = curr_aligned_scores = {}
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             if name == ref_name:
@@ -414,54 +408,37 @@ def find_significant_mutations():
             else:
                 aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = align_scores_by_name(name, sequence_str, sequence_scores)
 
-        aligned_scores[e_score_file] = curr_aligned_scores
-
-        curr_highest_values = {}
-        for name, scores in aligned_scores[e_score_file].items():
-            # highest scores are the ones above the absolute and relative thresholds, if exist
-            curr_highest_values[name] = [score if score is not None and
-                                         (selected_threshold is None or score >= selected_threshold) and
-                                         (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
-                                         else None for score in scores]
-        highest_values[e_score_file] = curr_highest_values
-
-        curr_binding_sites, curr_gaps, curr_insertions = {}, {}, {}
-        for name, scores in aligned_scores[e_score_file].items():
-            curr_binding_sites[name], curr_gaps[name], curr_insertions[name] = get_binding_sites(
-                curr_highest_values[name],
-                align_sequences_by_name(name, sequences[name]) if name != ref_name else sequences[name],
-                table.mer, aligned_positions[name])
-        binding_sites[e_score_file], gaps[e_score_file], insertions[e_score_file] = curr_binding_sites, curr_gaps, curr_insertions
+        highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_heighest_values_and_binding_sites(
+            aligned_scores[score_file], aligned_positions, sequences, ref_name, selected_threshold, ranks_threshold, table)
 
         # reduce binding sites
         # leave only one occurrence of each threesome
         bs_set = set()
-        for name in binding_sites[e_score_file]:
+        for name in binding_sites[score_file]:
             indices_to_remove = []
-            for i, bs in enumerate(binding_sites[e_score_file][name]):
+            for i, bs in enumerate(binding_sites[score_file][name]):
                 if bs[BindingSiteParams.SEQ].replace('-', '') in bs_set:
                     indices_to_remove.append(i)
                 else:
                     bs_set.add(bs[BindingSiteParams.SEQ])
             for i in reversed(indices_to_remove):
-                del binding_sites[e_score_file][name][i]
+                del binding_sites[score_file][name][i]
 
         # create MPRA-like data
-        mutants_effect = get_all_mutants_effect(aligned_scores[e_score_file], sequences, ref_name, mer=table.mer)
+        mutants_effect = get_all_mutants_effect(aligned_scores[score_file], sequences, ref_name, mer=table.mer)
 
+        curr_binding_sites = binding_sites[score_file]
         for name in sequences.keys():
             if name == ref_name:
                 continue
             indices_to_remove = []
             for i, bs in enumerate(curr_binding_sites[name]):
-                if does_equivalent_bs_exist(bs, binding_sites[e_score_file][ref_name]):
+                if does_equivalent_bs_exist(bs, binding_sites[score_file][ref_name]):
                     indices_to_remove.append(i)
             if len(indices_to_remove) == len(curr_binding_sites[name]):
                 # remove from all dicts
-                del aligned_scores[e_score_file][name]
-                del highest_values[e_score_file][name]
-                del binding_sites[e_score_file][name]
-                del gaps[e_score_file][name]
+                del aligned_scores[score_file][name]
+                del highest_values[score_file][name], binding_sites[score_file][name], gaps[score_file][name], insertions[score_file][name]
             else:
                 # remove only the equivalent binding sites
                 for i in reversed(indices_to_remove):
@@ -526,7 +503,7 @@ def upload_files():
 
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
-    e_score_files = get_escore_files(request)
+    score_files = get_score_files(request)
     ref_name = request.form['ref_name']
 
     aligned_scores = {}
@@ -540,36 +517,22 @@ def upload_files():
     if should_show_binding_sites:
         highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
 
-    for e_score_file in e_score_files:
-        e_score_path = os.path.join(app.config['ESCORE_FOLDER'], e_score_file)
+    for score_file in score_files:
+        score_path = os.path.join(app.config['ESCORE_FOLDER'], score_file)
 
-        name, motif, table = get_score_table(e_score_path, file_type)
+        name, motif, table = get_score_table(score_path, file_type)
         scores_dict = table.score_seqs(sequences)
 
-        max_scores[e_score_file] = table.max_score()
-        curr_aligned_scores = {}
+        max_scores[score_file] = table.max_score()
+        aligned_scores[score_file] = curr_aligned_scores = {}
         ref_seq, ref_scores = scores_dict[ref_name]
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = align_scores(ref_seq, sequence_str, sequence_scores)
 
-        aligned_scores[e_score_file] = curr_aligned_scores
-
         if should_show_binding_sites:
-            curr_highest_values = {}
-            for name, scores in aligned_scores[e_score_file].items():
-                # highest scores are the ones above the absolute and relative thresholds, if exist
-                curr_highest_values[name] = [score if score is not None and
-                                             (selected_threshold is None or score >= selected_threshold) and
-                                             (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
-                                             else None for score in scores]
-            highest_values[e_score_file] = curr_highest_values
-
-            curr_binding_sites, curr_gaps, curr_insertions = {}, {}, {}
-            for name, scores in aligned_scores[e_score_file].items():
-                curr_binding_sites[name], curr_gaps[name], curr_insertions[name] = get_binding_sites(
-                    curr_highest_values[name], align_sequences(ref_seq, sequences[name]), table.mer, aligned_positions[name])
-            binding_sites[e_score_file], gaps[e_score_file], insertions[e_score_file] = curr_binding_sites, curr_gaps, curr_insertions
+            highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_heighest_values_and_binding_sites(
+                aligned_scores[score_file], aligned_positions, sequences, ref_name, selected_threshold, ranks_threshold, table)
 
     if should_show_diff_only:
         show_diff_only(binding_sites, ref_name)
@@ -591,6 +554,21 @@ def upload_files():
         })
 
     return jsonify(plot_data)
+
+
+def find_heighest_values_and_binding_sites(aligned_scores, aligned_positions, sequences, ref_name,
+                       selected_threshold, ranks_threshold, table):
+    highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
+    for name, scores in aligned_scores.items():
+        # highest scores are the ones above the absolute and relative thresholds, if exist
+        highest_values[name] = [score if score is not None and
+                                (selected_threshold is None or score >= selected_threshold) and
+                                (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
+                                else None for score in scores]
+        binding_sites[name], gaps[name], insertions[name] = get_binding_sites(
+            highest_values[name], align_sequences(sequences[ref_name], sequences[name]), table.mer, aligned_positions[name])
+
+    return highest_values, binding_sites, gaps, insertions
 
 
 def show_diff_only(binding_sites, ref_name):
