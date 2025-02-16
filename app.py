@@ -400,7 +400,7 @@ def find_significant_mutations():
             else:
                 aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = align_scores_by_name(name, sequence_str, sequence_scores)
 
-        highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_heighest_values_and_binding_sites(
+        highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_highest_values_and_binding_sites(
             aligned_scores[score_file], aligned_positions, sequences, ref_name, selected_threshold, ranks_threshold, table)
 
         # reduce binding sites
@@ -523,7 +523,7 @@ def upload_files():
             aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = align_scores(ref_seq, sequence_str, sequence_scores)
 
         if should_show_binding_sites:
-            highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_heighest_values_and_binding_sites(
+            highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_highest_values_and_binding_sites(
                 aligned_scores[score_file], aligned_positions, sequences, ref_name, selected_threshold, ranks_threshold, table)
 
     if should_show_diff_only:
@@ -548,15 +548,18 @@ def upload_files():
     return jsonify(plot_data)
 
 
-def find_heighest_values_and_binding_sites(aligned_scores, aligned_positions, sequences, ref_name,
-                       selected_threshold, ranks_threshold, table):
+def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, sequences, ref_name,
+                                          selected_threshold, ranks_threshold, table):
     highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
+    selected_threshold = selected_threshold if selected_threshold is not None else -np.inf
+    ranks_threshold = ranks_threshold if ranks_threshold is not None else -np.inf
     for name, scores in aligned_scores.items():
+        scores = np.array(scores, dtype=np.float32)
         # highest scores are the ones above the absolute and relative thresholds, if exist
-        highest_values[name] = [score if score is not None and
-                                (selected_threshold is None or score >= selected_threshold) and
-                                (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
-                                else None for score in scores]
+        highest_values[name] = np.where(
+            (scores >= selected_threshold) & (scores >= ranks_threshold),
+            scores, None
+        ).tolist()
         binding_sites[name], gaps[name], insertions[name] = get_binding_sites(
             highest_values[name], align_sequences(sequences[ref_name], sequences[name]), table.mer, aligned_positions[name])
 
