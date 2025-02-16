@@ -327,6 +327,10 @@ class EScoreTable(ResultTable):
         self._mer = len(next(iter(self._dict)))
         super().__init__(table)
 
+    @property
+    def mer(self):
+        return self._mer
+
     def score(self, seq):
         scores = np.zeros(len(seq) - self._mer + 1)
         # for each position in the sequence

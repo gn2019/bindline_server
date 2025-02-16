@@ -1,4 +1,3 @@
-import json
 import functools
 import re
 
@@ -8,7 +7,6 @@ from flask_cors import CORS
 from Bio.Align import PairwiseAligner
 import json
 import os
-import sys
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
@@ -28,9 +26,10 @@ os.makedirs(app.config['ESCORE_FOLDER'], exist_ok=True)
 escore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ESCORE_MATRIX_PKL,
                                           rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
 zscore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ZSCORE_MATRIX_PKL,
-                                            rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
+                                          rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
 iscore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ISCORE_MATRIX_PKL,
-                                            rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
+                                          rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
+
 
 def recursive_dir(path):
     path = os.path.abspath(path)
@@ -166,6 +165,7 @@ def get_sequences():
 
     return jsonify({'sequences': sequences})
 
+
 def get_score_file(e_score_path, file_type):
     with open(e_score_path, 'r') as f:
         if file_type == 'escore':
@@ -178,8 +178,10 @@ def get_score_file(e_score_path, file_type):
             raise ValueError("Invalid file type selected.")
     return score
 
+
 def float_or_none(value):
     return float(value) if value is not None else None
+
 
 def get_identifier_by_type(file_type):
     if file_type == 'escore':
@@ -195,6 +197,7 @@ def get_identifier_by_type(file_type):
 @functools.lru_cache(maxsize=1000)
 def get_score_table(file_path, file_type):
     return next(get_score_file(file_path, file_type).parse_tables())
+
 
 def get_thresholds(request):
     file_type = request.form['file_type']
@@ -274,7 +277,7 @@ def find_binding_sites():
                 align_scores(ref_seq, sequence_str, sequence_scores))
             curr_binding_sites[name], curr_gaps[name], curr_insertions[name] = (
                 get_binding_sites(identified_binding_sites[e_score_file][name],
-                                  aligned_seqs[name], table._mer, aligned_positions[name]))
+                                  aligned_seqs[name], table.mer, aligned_positions[name]))
 
         identified_scores[e_score_file] = curr_aligned_scores
         binding_sites[e_score_file], gaps[e_score_file], insertions[e_score_file] = curr_binding_sites, curr_gaps, curr_insertions
@@ -320,16 +323,16 @@ def find_binding_sites():
 def get_all_point_mutations(sequence):
     mutants = {}
     for i, base in enumerate(sequence):
-        for c in 'ACGT':
+        for c in consts.DNA_BASES:
             if base != c:
                 mutants[f'm{i}{c}'] = sequence[:i] + c + sequence[i + 1:]
     return mutants
 
 
 def get_all_insertions(sequence):
-    mutants = {f'i0{c}': c + sequence for c in 'ACGT'}
+    mutants = {f'i0{c}': c + sequence for c in consts.DNA_BASES}
     for i, base in enumerate(sequence):
-        for c in 'ACGT':
+        for c in consts.DNA_BASES:
             if base != c:
                 mutants[f'i{i+1}{c}'] = sequence[:i+1] + c + sequence[i+1:]
     return mutants
@@ -344,12 +347,12 @@ def get_all_deletions(sequence):
 
 def get_all_mutants(name, sequence):
     mutants = {name: sequence}
-    for suff, seq in get_all_point_mutations(sequence).items():
-        mutants[f'{name}_{suff}'] = seq
-    for suff, seq in get_all_insertions(sequence).items():
-        mutants[f'{name}_{suff}'] = seq
-    for suff, seq in get_all_deletions(sequence).items():
-        mutants[f'{name}_{suff}'] = seq
+    for suffix, seq in get_all_point_mutations(sequence).items():
+        mutants[f'{name}_{suffix}'] = seq
+    for suffix, seq in get_all_insertions(sequence).items():
+        mutants[f'{name}_{suffix}'] = seq
+    for suffix, seq in get_all_deletions(sequence).items():
+        mutants[f'{name}_{suffix}'] = seq
     return mutants
 
 
@@ -404,7 +407,6 @@ def find_significant_mutations():
 
         max_scores[e_score_file] = table.max_score()
         curr_aligned_scores = {}
-        ref_seq, ref_scores = scores_dict[ref_name]
 
         for name, (sequence_str, sequence_scores) in scores_dict.items():
             if name == ref_name:
@@ -418,9 +420,8 @@ def find_significant_mutations():
         for name, scores in aligned_scores[e_score_file].items():
             # highest scores are the ones above the absolute and relative thresholds, if exist
             curr_highest_values[name] = [score if score is not None and
-                                                  (selected_threshold is None or score >= selected_threshold) and
-                                                  (ranks_threshold is None or score >= table.rank_threshold(
-                                                      ranks_threshold))
+                                         (selected_threshold is None or score >= selected_threshold) and
+                                         (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
                                          else None for score in scores]
         highest_values[e_score_file] = curr_highest_values
 
@@ -429,7 +430,7 @@ def find_significant_mutations():
             curr_binding_sites[name], curr_gaps[name], curr_insertions[name] = get_binding_sites(
                 curr_highest_values[name],
                 align_sequences_by_name(name, sequences[name]) if name != ref_name else sequences[name],
-                table._mer, aligned_positions[name])
+                table.mer, aligned_positions[name])
         binding_sites[e_score_file], gaps[e_score_file], insertions[e_score_file] = curr_binding_sites, curr_gaps, curr_insertions
 
         # reduce binding sites
@@ -446,7 +447,7 @@ def find_significant_mutations():
                 del binding_sites[e_score_file][name][i]
 
         # create MPRA-like data
-        mutants_effect = get_all_mutants_effect(aligned_scores[e_score_file], sequences, ref_name, mer=table._mer)
+        mutants_effect = get_all_mutants_effect(aligned_scores[e_score_file], sequences, ref_name, mer=table.mer)
 
         for name in sequences.keys():
             if name == ref_name:
@@ -512,8 +513,9 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
     for i in range(len(ref_seq)):
         df.loc[i] = effects[i] - ref_effect[i]
     mutants_effect = df.to_dict(orient='index')
-    mutants_effect = [{k:v for k,v in mutants_effect[pos].items() if k != ref_seq[pos]} for pos in range(len(mutants_effect))]
+    mutants_effect = [{k: v for k, v in mutants_effect[pos].items() if k != ref_seq[pos]} for pos in range(len(mutants_effect))]
     return mutants_effect
+
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
@@ -558,15 +560,15 @@ def upload_files():
             for name, scores in aligned_scores[e_score_file].items():
                 # highest scores are the ones above the absolute and relative thresholds, if exist
                 curr_highest_values[name] = [score if score is not None and
-                                                      (selected_threshold is None or score >= selected_threshold) and
-                                                      (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
+                                             (selected_threshold is None or score >= selected_threshold) and
+                                             (ranks_threshold is None or score >= table.rank_threshold(ranks_threshold))
                                              else None for score in scores]
             highest_values[e_score_file] = curr_highest_values
 
             curr_binding_sites, curr_gaps, curr_insertions = {}, {}, {}
             for name, scores in aligned_scores[e_score_file].items():
                 curr_binding_sites[name], curr_gaps[name], curr_insertions[name] = get_binding_sites(
-                    curr_highest_values[name], align_sequences(ref_seq, sequences[name]), table._mer, aligned_positions[name])
+                    curr_highest_values[name], align_sequences(ref_seq, sequences[name]), table.mer, aligned_positions[name])
             binding_sites[e_score_file], gaps[e_score_file], insertions[e_score_file] = curr_binding_sites, curr_gaps, curr_insertions
 
     if should_show_diff_only:
@@ -617,7 +619,7 @@ def get_binding_sites(highest_values, seq, mer, aligned_positions):
             start = bs[i]
         if i == len(bs) - 1 or (bs[i + 1] - bs[i] > 1 and any(c != '-' for c in seq[bs[i] + 1:bs[i + 1]])):
             end = bs[i]
-            # count (table._mer - 1) non-gaps after the end
+            # count (mer - 1) non-gaps after the end
             remain = mer - 1
             for c in seq[end + 1:]:
                 end += 1
@@ -628,7 +630,8 @@ def get_binding_sites(highest_values, seq, mer, aligned_positions):
             bs_seq = seq[start:end + 1]
             bs_start = len(seq[:start].replace('-', ''))  # start index in the original sequence
             bs_end = bs_start + len(bs_seq.replace('-', ''))
-            curr_binding_sites.append((aligned_positions[start], aligned_positions[end], bs_seq, bs_start, bs_end , True))
+            curr_binding_sites.append(
+                (aligned_positions[start], aligned_positions[end], bs_seq, bs_start, bs_end, True))
             # add to curr_gaps all the '-' indices inside (start, end) intervals
             curr_gaps += get_gaps(seq, start, end, aligned_positions)
             curr_insertions += get_insertions(seq, start, end, aligned_positions)

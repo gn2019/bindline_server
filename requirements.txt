@@ -1,7 +1,8 @@
-Flask>=3
+Flask>=2.2.5
 Flask-Cors==5.0.0
-pandas
+pandas>=2.1.4
 seqlogo
-matplotlib
+matplotlib>=3.8.0
 biopython>=1.83
-tqdm
+tqdm>=4.66.3
+numpy>=1.26.4
