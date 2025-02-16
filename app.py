@@ -220,17 +220,9 @@ def find_binding_sites():
     identified_TFs = identifier(sequences, absolute_threshold=selected_threshold, rank_threshold=ranks_threshold)
 
     # Extract unique file paths of identified TFs
-    identified_unq_files = []
-    for seq_name in identified_TFs:
-
-        # identified_TFs[seq_name] is a tuple where first value is the sequence
-        # and the second is the list of lists of file paths
-        pos_nested_ls = identified_TFs[seq_name][1]
-
-        # For each list of path corresponding to a position
-        for pos_ls in pos_nested_ls:
-            identified_unq_files.extend(pos_ls)
-    identified_unq_files = np.unique(identified_unq_files)
+    # identified_TFs[seq_name] is a tuple where first value is the sequence
+    # and the second is the list of lists of file paths
+    identified_unq_files = sum(sum(map(lambda s: s[1], identified_TFs.values()), []), [])
 
     # Get the tables for each identified file
     identified_tables = {}
