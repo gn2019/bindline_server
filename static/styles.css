@@ -44,11 +44,8 @@ table {
     margin-top: 5px;
 }
 
-th, td {
-    text-align: center;
-}
-
 th {
+    text-align: center;
     background-color: #f1f1f1;
 }
 
