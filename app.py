@@ -552,7 +552,7 @@ def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, seq
                                           selected_threshold, ranks_threshold, table):
     highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
     selected_threshold = selected_threshold if selected_threshold is not None else -np.inf
-    ranks_threshold = ranks_threshold if ranks_threshold is not None else -np.inf
+    ranks_threshold = table.rank_threshold(ranks_threshold) if ranks_threshold is not None else -np.inf
     for name, scores in aligned_scores.items():
         scores = np.array(scores, dtype=np.float32)
         # highest scores are the ones above the absolute and relative thresholds, if exist
@@ -602,7 +602,7 @@ def get_binding_sites(highest_values, seq, mer, aligned_positions):
                         break
             bs_seq = seq[start:end + 1]
             bs_start = len(seq[:start].replace('-', ''))  # start index in the original sequence
-            bs_end = bs_start + len(bs_seq.replace('-', ''))
+            bs_end = bs_start + len(bs_seq.replace('-', '')) - 1
             curr_binding_sites.append(
                 (aligned_positions[start], aligned_positions[end], bs_seq, bs_start, bs_end, True))
             # add to curr_gaps all the '-' indices inside (start, end) intervals

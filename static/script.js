@@ -39,8 +39,7 @@ async function loadSequences() {
     } else if (existingFastaSelect.value) {
         formData.append('existing_fasta', existingFastaSelect.value);
     } else {
-        alert("Please select a FASTA file first.");
-        return;
+        throw new Error("Please select a FASTA file first.");
     }
 
     await fetch('/sequences', {
@@ -193,29 +192,23 @@ async function uploadAndPlot() {
     showGlobalLoading(); // Show loading animation before request
 
     const formData = new FormData(document.getElementById('upload-form'));
-    // if no rows of sequences, load them
-    if (!$('#sequence-tbody tr').length) {
-        await loadSequences();
-        await new Promise(requestAnimationFrame); // Wait for the UI to update
-        console.log('loaded');
-    }
-    let selectedSequences = gatherSelectedSequences();
-    if (Object.keys(selectedSequences).length === 0) {
-        alert('Please select at least one sequence.');
+    try {
+        // if no rows of sequences, load them
+        if (!$('#sequence-tbody tr').length) {
+            await loadSequences();
+            await new Promise(requestAnimationFrame); // Wait for the UI to update
+            console.log('loaded');
+        }
+        let selectedSequences = gatherSelectedSequences();
+        const refName = getReferenceName(); // Now this will run after sequences are loaded
+
+        appendSequencesAndOptions(formData, selectedSequences, refName);
+        validateConditions(selectedSequences);
+    } catch (error) {
+        alert(error);
         hideGlobalLoading();
         return;
     }
-
-    const refName = getReferenceName(); // Now this will run after sequences are loaded
-    if (!refName) return;
-
-    try {
-        appendSequencesAndOptions(formData, selectedSequences, refName);
-    } catch (error) {
-        alert(error);
-        return;
-    }
-    if (!validateConditions(selectedSequences)) return;
     formData.forEach((value, key) => console.log(key, value));
 
 
@@ -235,6 +228,9 @@ function gatherSelectedSequences() {
             selectedSequences[name] = row.cells[2].querySelector('textarea').value;
         }
     });
+    if (Object.keys(selectedSequences).length === 0) {
+        throw new Error('Please select at least one sequence.');
+    }
     return selectedSequences;
 }
 
@@ -246,8 +242,7 @@ function getReferenceName() {
         refRow = getRefRow();
     }
     if (!refRow) {
-        alert('No reference sequence selected.');
-        return null;
+        throw new Error('No reference sequence selected.');
     }
     return refRow.querySelector('input[type="text"]').value;
 }
@@ -299,8 +294,7 @@ function appendEScoreFiles(formData) {
 function validateConditions(selectedSequences) {
     const searchSignificantMutations = document.getElementById('search-significant-mutations').checked;
     if (searchSignificantMutations && Object.keys(selectedSequences).length !== 1) {
-        alert('Please select only one sequence for searching significant mutations.');
-        return false;
+        throw new Error('Please select only one sequence for searching significant mutations.');
     }
 
     const thresholdsEnabled = [
@@ -311,11 +305,8 @@ function validateConditions(selectedSequences) {
     ].some(id => document.getElementById(id).checked);
 
     if ((searchSignificantMutations || document.getElementById('search-binding-sites').checked) && !thresholdsEnabled) {
-        alert('Please enable at least one threshold.');
-        return false;
+        throw new Error('Please enable at least one threshold.');
     }
-
-    return true;
 }
 
 
@@ -338,6 +329,7 @@ async function handlePlotData(plotData) {
     for (const [key, component] of Object.entries(plotComponents)) {
         const tabNavigation = document.getElementById(component.id.replace('-plot', '-tab-nav'));
         if (component.checkFunc && !component.checkFunc(plotData)) {
+            document.getElementById(component.id).innerHTML = '';  // remove plot
             delete plotComponents[key];
             tabNavigation.style.display = 'none';
         } else {
@@ -369,7 +361,8 @@ async function handlePlotData(plotData) {
             toggleLoading(component.id, false); // Hide spinner
 
             div.sequence_str = plotData.sequence_strs[plotData.ref_name];
-            div.on('plotly_afterplot', () => set_x_ticks(div));
+            div.on('plotly_afterplot', () => setXTicks(div));
+            setXTicks(div);
 
             component.div = div;
             component.traces = traces;
@@ -711,7 +704,7 @@ function get_gaps(aligned_seq) {
 }
 
 let isSettingTicks = {}; // Flag to prevent recursion
-function set_x_ticks(plotDiv) {
+function setXTicks(plotDiv) {
     if (isSettingTicks[plotDiv.id]) return; // Avoid recursive calls
     isSettingTicks[plotDiv.id] = true; // Set the flag to indicate we're inside the function
 
