@@ -65,20 +65,23 @@ async function loadSequences() {
     });
 }
 
+function getSequenceRows() {
+    return document.querySelectorAll('#sequence-tbody tr');
+}
+
 function setAsRef(row) {
     if (!isCheckedRow(row)) {
         return;
     }
     // remove ref class from other rows
-    document.querySelectorAll('#sequence-tbody tr').forEach(row => {
+    getSequenceRows().forEach(row => {
         unsetAsRefInner(row);
     });
     setAsRefInner(row);
 }
 
 function getFirstCheckedRow() {
-    const rows = document.querySelectorAll('#sequence-tbody tr');
-    for (let row of rows) {
+    for (let row of getSequenceRows()) {
         if (isCheckedRow(row)) {
             return row;
         }
@@ -222,7 +225,7 @@ async function uploadAndPlot() {
 /** Helper function to gather all selected sequences */
 function gatherSelectedSequences() {
     const selectedSequences = {};
-    document.querySelectorAll('#sequence-tbody tr').forEach(row => {
+    getSequenceRows().forEach(row => {
         if (isCheckedRow(row)) {
             const name = row.cells[1].querySelector('input').value;
             selectedSequences[name] = row.cells[2].querySelector('textarea').value;
@@ -840,8 +843,12 @@ function hideGlobalLoading() {
 }
 
 
+function getRadio(name) {
+    return document.querySelectorAll(`input[name="${name}"]`);
+}
+
 document.addEventListener("DOMContentLoaded", function () {
-    const viewModeRadio = document.querySelectorAll('input[name="view-option"]');
+    const viewModeRadio = getRadio("view-option");
     const stackedContainer = document.getElementById("stacked-container");
     const plotTabs = document.getElementById("plot-tabs");
     const plotStacked = document.getElementById("plot-stacked");
@@ -887,7 +894,7 @@ document.getElementById('upload-and-plot').addEventListener('click', () => uploa
 
 // apply hideThresholds on page load and on change of radio buttons
 hideThresholds();
-document.querySelectorAll('input[name="file_type"]').forEach(radio => {
+getRadio("file_type").forEach(radio => {
     radio.addEventListener('change', hideThresholds);
 });
 
