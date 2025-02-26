@@ -152,12 +152,17 @@
             Loading Data<span id="loading-dots">...</span>
         </div>
 
-        <!-- Radio buttons for selecting view -->
-        <div class="btn-group w-10">
-            <input type="radio" class="btn-check" name="view-option" id="view-stacked" value="stacked" checked>
-            <label class="btn btn-outline-primary" for="view-stacked">Stacked View</label>
-            <input type="radio" class="btn-check" name="view-option" id="view-tabbed" value="tabbed">
-            <label class="btn btn-outline-primary" for="view-tabbed">Tabbed View</label>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <!-- Radio buttons for selecting view -->
+            <div class="btn-group w-10">
+                <input type="radio" class="btn-check" name="view-option" id="view-stacked" value="stacked" checked>
+                <label class="btn btn-outline-primary" for="view-stacked">Stacked View</label>
+                <input type="radio" class="btn-check" name="view-option" id="view-tabbed" value="tabbed">
+                <label class="btn btn-outline-primary" for="view-tabbed">Tabbed View</label>
+            </div>
+
+            <!-- in the same row, empty div for writing the export path to it -->
+            <div id="export-path" class="ms-2"></div>
         </div>
 
          <!-- Shared Plot Containers (Rendered Once) -->

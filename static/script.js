@@ -374,6 +374,11 @@ async function handlePlotData(plotData) {
         }, 0);
     }
 
+    // write export path as a title
+    const exportPathDiv = document.getElementById('export-path');
+    // make a pressable link to the export path
+    exportPathDiv.innerHTML = `<button id="download-btn" class="download-btn"><a href="${plotData.export_url}" target="_blank">⬇ Download Data</a></button>`;
+
     // Run all plots asynchronously without blocking UI updates
     Object.values(plotComponents).forEach(plotComponent);
 
@@ -544,7 +549,8 @@ function createAllMutantsTraces(plotData) {
     let traces = [];
     let lines = [];
 
-    Object.entries(plotData.mutants_effect).forEach(([position, effects]) => {
+    const firstTF = Object.keys(plotData.mutants_effect)[0];
+    Object.entries(plotData.mutants_effect[firstTF]).forEach(([position, effects]) => {
         let refNuc = plotData.sequence_strs[plotData.ref_name][position]
 
         Object.entries(effects).forEach(([nuc, effect]) => {

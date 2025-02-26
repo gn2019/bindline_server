@@ -106,3 +106,24 @@ th {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+.download-btn {
+    background-color: #007BFF; /* Bootstrap Blue */
+    color: white;
+    border: none;
+    font-size: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.download-btn:hover {
+    background-color: #0056b3;
+
+}
+
+.download-btn a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+}

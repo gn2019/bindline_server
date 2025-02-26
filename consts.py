@@ -10,5 +10,6 @@ ESCORE_MATRIX_PKL = os.path.join(UPLOAD_DIR, 'escore_matrix.pkl')
 ZSCORE_MATRIX_PKL = os.path.join(UPLOAD_DIR, 'zscore_matrix.pkl')
 ISCORE_MATRIX_PKL = os.path.join(UPLOAD_DIR, 'iscore_matrix.pkl')
 ESCORE_RANK_MATRIX_PKL = os.path.join(UPLOAD_DIR, 'escore_rank_matrix.pkl')
+RESULTS_DIR = 'results'
 
 DNA_BASES = ['A', 'C', 'G', 'T']
