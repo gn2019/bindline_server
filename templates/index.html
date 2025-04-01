@@ -14,9 +14,80 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
-    <div class="position-relative container-fluid p-3">
-        <h3 class="text-center text-primary">BindLine</h3>
+    <!-- Navbar with BindLine title and user menu -->
+    <nav class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="text-primary mb-0 mx-auto" style="cursor: pointer; font-size: 2rem;" onclick="redirectToIndex()">BindLine</h3>
+        <div class="d-flex align-items-center">
+            <span class="me-3" style="font-size: 1.2rem; font-weight: bold;">{{ current_user.username }}</span>
+            <div class="dropdown">
+                <button class="btn btn-outline-primary dropdown-toggle d-flex align-items-center" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 1.5rem;">
+                    <i class="fas fa-user-circle"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                    {% if is_authenticated %}
+                        <li><a class="dropdown-item" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('auth.logout', next=request.path or url_for('index')) }}">Log Out</a></li>
+                    {% else %}
+                        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#loginModal">Log In</a></li>
+                        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#registerModal">Sign Up</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
 
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal"  data-url-login="{{ url_for('auth.login') }}" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginModalLabel">Login</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="loginUsername" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="loginUsername" name="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="loginPassword" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="loginPassword" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Log In</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal fade" id="registerModal" data-url-register="{{ url_for('auth.register') }}" tabindex="-1" aria-labelledby="registerModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="registerModalLabel">Sign Up</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label for="registerUsername" class="form-label">Username (English letters and digits only, 3-20 characters long)</label>
+                            <!-- alphanumeric and 3-20 characters long -->
+                            <input type="text" class="form-control" id="registerUsername" name="username" pattern="^[a-zA-Z0-9]{3,20}$" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerPassword" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="registerPassword" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Sign Up</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="position-relative container-fluid p-3">
         <!-- Toggle Button for Collapsible Form -->
         <button class="btn btn-outline-primary btn-sm p-0 position-absolute start-0 me-2"
                 type="button" data-bs-toggle="collapse" data-bs-target="#upload-form-container"

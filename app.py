@@ -2,8 +2,10 @@ import functools
 import re
 
 import pandas as pd
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory
+from flask import session, redirect, url_for, flash
 from flask_cors import CORS
+from flask_login import LoginManager, login_required, current_user
 from Bio.Align import PairwiseAligner
 import json
 import os
@@ -12,12 +14,30 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 import bindline
 import consts
+from database_setup import db, User
+from auth import auth_bp  # Import the authentication blueprint
+
 
 app = Flask(__name__)
 CORS(app)
 app.config['UPLOAD_FOLDER'] = consts.UPLOAD_DIR
 app.config['FASTA_FOLDER'] = consts.FASTA_DIR
 app.config['ESCORE_FOLDER'] = consts.ESCORE_DIR
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SECRET_KEY'] = 'GAIAEJKC@#QJTKKZ MEK J$KJFSZ WEFSFWAfewa'
+
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login'
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+app.register_blueprint(auth_bp, url_prefix='/auth')
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FASTA_FOLDER'], exist_ok=True)
@@ -36,17 +56,60 @@ def recursive_dir(path):
     return [os.path.join(root, file)[len(path)+1:] for root, _, files in os.walk(path) for file in files]
 
 
-# List existing files in the upload directory
+def recursive_dir_under_root(root, path, include_dirname=True):
+    files = recursive_dir(os.path.join(root, path))
+    if include_dirname:
+        return list(map(lambda f: os.path.join(path, f), files))
+    else:
+        return files
+
+
+@login_required
+@app.route('/dashboard')
+def dashboard():
+    return render_template("dashboard.html", username=current_user.username,
+                           fasta_files=list_user_fasta_files(current_user.username, include_username=False),
+                           score_files=list_user_score_files(current_user.username, include_username=False))
+
+
+def list_user_score_files(username, include_username=True):
+    return recursive_dir_under_root(app.config['ESCORE_FOLDER'], username, include_dirname=include_username) if username else []
+
+
+def list_user_fasta_files(username, include_username=True):
+    return recursive_dir_under_root(app.config['FASTA_FOLDER'], username, include_dirname=include_username) if username else []
+
+
+def list_public_score_files():
+    return list_user_score_files('public')
+
+
+def list_public_fasta_files():
+    return list_user_fasta_files('public')
+
+
+def list_user_public_score_files(username):
+    user_files = list_user_score_files(username)
+    public_files = list_public_score_files()
+    return user_files, public_files
+
+
+def list_user_public_fasta_files(username):
+    user_files = list_user_fasta_files(username)
+    public_files = list_public_fasta_files()
+    return user_files, public_files
+
+
 @app.route('/list-files/<filetype>', methods=['GET'])
 def list_files(filetype):
-    # fasta files in "fasta" directory, escore files in "escore" directory
+    """Lists public and user-specific files for FASTA or E-Score files."""
+    username = current_user.username if current_user.is_authenticated else None
     if filetype == 'fasta':
-        files = recursive_dir(app.config['FASTA_FOLDER'])
+        return jsonify(sum(list_user_public_fasta_files(username), []))
     elif filetype == 'escore':
-        files = recursive_dir(app.config['ESCORE_FOLDER'])
+        return jsonify(sum(list_user_public_score_files(username), []))
     else:
-        files = []
-    return jsonify(files)
+        return jsonify({"error": "Invalid file type"}), 400
 
 
 def get_insertion_fractions(num_of_fractions, base_index):
@@ -137,7 +200,7 @@ def align_scores_by_name(name, seq, scores):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', is_authenticated=current_user.is_authenticated)
 
 
 @app.route('/sequences', methods=['POST'])
@@ -625,6 +688,37 @@ def get_insertions(seq, start, end, aligned_positions):
         (aligned_positions[match.start() + start] + aligned_positions[match.end() + start - 1]) / 2,
         seq[match.start() + start:match.end() + start].upper())
             for match in re.finditer(r'[a-z]+', seq[start:end + 1])]
+
+
+@app.route('/delete_file/<file_type>/<file>', methods=['POST'])
+@login_required
+def delete_file(file_type, file):
+    if file_type == 'fasta':
+        file_path = os.path.join(app.config['FASTA_FOLDER'], current_user.username, file)
+    elif file_type == 'score':
+        file_path = os.path.join(app.config['ESCORE_FOLDER'], current_user.username, file)
+    else:
+        return jsonify({'error': 'Invalid file type'}), 400
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return jsonify({'message': 'File deleted successfully'})
+    else:
+        return jsonify({'error': 'File not found'}), 404
+
+
+@app.route('/download/<file_type>/<file>')
+@login_required
+def download_file(file_type, file):
+    if file_type == 'fasta':
+        file_path = os.path.join(app.config['FASTA_FOLDER'], current_user.username, file)
+    elif file_type == 'score':
+        file_path = os.path.join(app.config['ESCORE_FOLDER'], current_user.username, file)
+    else:
+        return jsonify({'error': 'Invalid file type'}), 400
+    if os.path.exists(file_path):
+        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path), as_attachment=True)
+    else:
+        return jsonify({'error': 'File not found'}), 404
 
 
 if __name__ == '__main__':
