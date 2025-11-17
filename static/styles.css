@@ -106,3 +106,16 @@ th {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+.nav-link-hover {
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.nav-link-hover:hover {
+    color: #0d6efd !important; /* Bootstrap primary */
+    transform: translateY(-1px);
+}
+
+.nav-big {
+    font-size: 1.2rem;
+}

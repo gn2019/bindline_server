@@ -12,14 +12,14 @@
     <h3 class="text-center text-primary mb-4" style="cursor: pointer;" onclick="redirectToIndex()">BindLine</h3>
 
     <div class="text-center mb-4">
-        <h1 class="h4">Welcome to your dashboard, <span class="text-success">{{ username }}</span></h1>
+        <h1 class="h4">Public Data Download</h1>
     </div>
 
     <div class="row">
         <!-- Fasta Files Section -->
         <div class="col-md-6">
             <h2 class="h5 text-secondary">Fasta Files</h2>
-            <form method="POST" action="{{ url_for('bulk_action', file_type='fasta', is_public=false) }}">
+            <form method="POST" action="{{ url_for('bulk_action', file_type='fasta', is_public=true) }}">
                 <div class="mb-2">
                     <input type="checkbox" id="checkAllFasta" onclick="toggleAll('fasta')"> Check all
                 </div>
@@ -30,14 +30,13 @@
                                 <input type="checkbox" class="fasta-box" name="files" value="{{ file }}">
                                 {{ file }}
                             </div>
-                            <a class="btn btn-sm btn-primary me-2" href="{{ url_for('download_file', file_type='fasta', file=file) }}">
+                            <a class="btn btn-sm btn-primary me-2" href="{{ url_for('download_public_file', file_type='fasta', file=file) }}">
                                 <i class="fas fa-download"></i>
                             </a>
                         </li>
                     {% endfor %}
                 </ul>
 
-                <button class="btn btn-danger mt-2" name="action" value="delete">Delete selected</button>
                 <button class="btn btn-primary mt-2" name="action" value="download">Download selected</button>
             </form>
         </div>
@@ -45,7 +44,7 @@
         <!-- Score Files Section -->
         <div class="col-md-6">
             <h2 class="h5 text-secondary">Score Files</h2>
-            <form method="POST" action="{{ url_for('bulk_action', file_type='score', is_public=false) }}">
+            <form method="POST" action="{{ url_for('bulk_action', file_type='score', is_public=true) }}">
                 <div class="mb-2">
                     <input type="checkbox" id="checkAllScore" onclick="toggleAll('score')"> Check all
                 </div>
@@ -56,14 +55,13 @@
                                 <input type="checkbox" class="score-box" name="files" value="{{ file }}">
                                 {{ file }}
                             </div>
-                            <a class="btn btn-sm btn-primary me-2" href="{{ url_for('download_file', file_type='score', file=file) }}">
+                            <a class="btn btn-sm btn-primary me-2" href="{{ url_for('download_public_file', file_type='score', file=file) }}">
                                 <i class="fas fa-download"></i>
                             </a>
                         </li>
                     {% endfor %}
                 </ul>
 
-                <button class="btn btn-danger mt-2" name="action" value="delete">Delete selected</button>
                 <button class="btn btn-primary mt-2" name="action" value="download">Download selected</button>
             </form>
         </div>

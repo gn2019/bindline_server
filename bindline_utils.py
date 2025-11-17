@@ -30,12 +30,12 @@ def list_user_fasta_files(username, include_username=True):
     return recursive_dir_under_root(consts.FASTA_DIR, username, include_dirname=include_username) if username else []
 
 
-def list_public_score_files():
-    return list_user_score_files('public')
+def list_public_score_files(include_username=True):
+    return list_user_score_files('public', include_username=include_username)
 
 
-def list_public_fasta_files():
-    return list_user_fasta_files('public')
+def list_public_fasta_files(include_username=True):
+    return list_user_fasta_files('public', include_username=include_username)
 
 
 def list_user_public_score_files(username):

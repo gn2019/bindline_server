@@ -1,10 +1,12 @@
 
-from flask import Flask, render_template, request, jsonify, Response, send_from_directory
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory, redirect, url_for, send_file
 from flask_cors import CORS
 from flask_login import LoginManager, login_required, current_user
+import zipfile
 import ssl
 import json
 import os
+import io
 
 import bindline
 import consts
@@ -390,19 +392,67 @@ def delete_file(file_type, file):
         return jsonify({'error': 'File not found'}), 404
 
 
-@app.route('/download/<file_type>/<file>')
-@login_required
-def download_file(file_type, file):
-    if file_type == 'fasta':
-        file_path = os.path.join(app.config['FASTA_FOLDER'], current_user.username, file)
-    elif file_type == 'score':
-        file_path = os.path.join(app.config['ESCORE_FOLDER'], current_user.username, file)
-    else:
-        return jsonify({'error': 'Invalid file type'}), 400
+@app.route('/download-public/<file_type>/<file>')
+def download_public_file(file_type, file):
+    file_path = get_file_path(file_type, file, is_public=True)
     if os.path.exists(file_path):
         return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path), as_attachment=True)
     else:
         return jsonify({'error': 'File not found'}), 404
+
+
+@app.route('/download/<file_type>/<file>')
+@login_required
+def download_file(file_type, file):
+    file_path = get_file_path(file_type, file, is_public=False)
+    if os.path.exists(file_path):
+        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path), as_attachment=True)
+    else:
+        return jsonify({'error': 'File not found'}), 404
+
+
+def get_file_path(file_type, f, is_public=False):
+    if file_type == 'fasta':
+        return os.path.join(app.config['FASTA_FOLDER'], 'public' if is_public else current_user.username, f)
+    elif file_type == 'score':
+        return os.path.join(app.config['ESCORE_FOLDER'], 'public' if is_public else current_user.username, f)
+    else:
+        raise ValueError("Invalid file type")
+
+
+@app.post("/bulk/<file_type>/<is_public>")
+def bulk_action(file_type, is_public=False):
+    files = request.form.getlist("files")
+    action = request.form["action"]
+
+    if action == "delete":
+        for f in files:
+            delete_file(file_type, f)
+        return redirect(url_for("dashboard"))
+
+    if action == "download":
+        # create a zip
+        mem = io.BytesIO()
+        with zipfile.ZipFile(mem, "w") as z:
+            for f in files:
+                path = get_file_path(file_type, f, is_public=is_public)
+                z.write(path, arcname=f)
+        mem.seek(0)
+        return send_file(mem, as_attachment=True, download_name="files.zip")
+
+
+@app.route("/help")
+def help():
+    return render_template("help.html")
+
+
+@app.route("/data")
+def data_page():
+    return render_template(
+        "data.html",
+        fasta_files=list_public_fasta_files(include_username=False),
+        score_files=list_public_score_files(include_username=False)
+    )
 
 
 if __name__ == '__main__':
