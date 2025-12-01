@@ -4,10 +4,14 @@ import functools
 import numpy as np
 import pandas as pd
 from Bio.Align import PairwiseAligner
+from flask_login import login_required
 from numpy.lib.stride_tricks import sliding_window_view
 
+import auth
 import consts
 import bindline
+import files
+
 
 def recursive_dir(path):
     path = os.path.abspath(path)
@@ -22,31 +26,41 @@ def recursive_dir_under_root(root, path, include_dirname=True):
         return files
 
 
-def list_user_score_files(username, include_username=True):
+def list_user_score_file_names(username, include_username=True):
+    return [f.filename for f in files.list_user_score_files()]
     return recursive_dir_under_root(consts.ESCORE_DIR, username, include_dirname=include_username) if username else []
 
 
-def list_user_fasta_files(username, include_username=True):
+def list_user_fasta_file_names(username, include_username=True):
+    return [f.filename for f in files.list_user_fasta_files()]
     return recursive_dir_under_root(consts.FASTA_DIR, username, include_dirname=include_username) if username else []
 
 
-def list_public_score_files(include_username=True):
-    return list_user_score_files('public', include_username=include_username)
+def list_public_score_file_names(include_username=True):
+    return [f.filename for f in files.list_public_score_files()]
+    return list_user_score_file_names(consts.PUBLIC_DIR, include_username=include_username)
 
 
-def list_public_fasta_files(include_username=True):
-    return list_user_fasta_files('public', include_username=include_username)
+def list_public_fasta_file_names(include_username=True):
+    return [f.filename for f in files.list_public_fasta_files()]
+    return list_user_fasta_file_names(consts.PUBLIC_DIR, include_username=include_username)
 
 
-def list_user_public_score_files(username):
-    user_files = list_user_score_files(username)
-    public_files = list_public_score_files()
+def list_user_public_score_file_names(username=None):
+    return sum(map(lambda fs: [f.filename for f in fs], files.list_user_public_score_files()), [])
+    user_files = list_user_score_file_names(username)
+    public_files = list_public_score_file_names()
     return user_files, public_files
 
 
-def list_user_public_fasta_files(username):
-    user_files = list_user_fasta_files(username)
-    public_files = list_public_fasta_files()
+def list_user_public_score_file_jsons():
+    return sum(map(lambda fs: [f.to_public_json() for f in fs], files.list_user_public_score_files()), [])
+
+
+def list_user_public_fasta_file_names(username=None):
+    return sum(map(lambda fs: [f.filename for f in fs], files.list_user_public_fasta_files()), [])
+    user_files = list_user_fasta_file_names(username)
+    public_files = list_public_fasta_file_names()
     return user_files, public_files
 
 
@@ -136,17 +150,22 @@ def align_scores_by_name(name, seq, scores):
     raise ValueError("Invalid mutation type.")
 
 
+def get_score_file_from_stream(score_stream, file_type):
+    if file_type == consts.ESCORE:
+        return  bindline.UniProbeEScoreFile(score_stream.read())
+    if file_type == consts.ZSCORE:
+        return  bindline.UniProbeZScoreFile(score_stream.read())
+    if file_type == consts.ISCORE:
+        return bindline.UniProbeIScoreFile(score_stream.read())
+    raise ValueError("Invalid file type selected.")
+
+
 def get_score_file(score_path, file_type):
+    # if is stream, read directly
+    if hasattr(score_path, 'read'):
+        return get_score_file_from_stream(score_path, file_type)
     with open(score_path, 'r') as f:
-        if file_type == 'escore':
-            score = bindline.UniProbeEScoreFile(f.read())
-        elif file_type == 'zscore':
-            score = bindline.UniProbeZScoreFile(f.read())
-        elif file_type == 'iscore':
-            score = bindline.UniProbeIScoreFile(f.read())
-        else:
-            raise ValueError("Invalid file type selected.")
-    return score
+        return get_score_file_from_stream(f, file_type)
 
 
 def float_or_none(value):
@@ -158,13 +177,35 @@ def get_score_table(file_path, file_type):
     return next(get_score_file(file_path, file_type).parse_tables())
 
 
+def get_public_matrix_path(filename):
+    return os.path.join(consts.ESCORE_DIR, consts.PUBLIC_DIR, filename)
+
+
+@login_required
+def get_user_matrix_path(name, ranks=False):
+    if ranks:
+        filename = consts.ESCORE_RANK_MATRIX
+    else:
+        filename = {
+            consts.ESCORE: consts.ESCORE_MATRIX,
+            consts.ZSCORE: consts.ZSCORE_MATRIX,
+            consts.ISCORE: consts.ISCORE_MATRIX
+        }[name]
+    path = os.path.join(consts.ESCORE_DIR, auth.get_current_user_uuid(), filename)
+    return path
+
+
+def get_user_matrix_path_if_exists(*args, **kwargs):
+    path = get_user_matrix_path(*args, **kwargs)
+    return path if os.path.exists(path) else None
+
 def get_thresholds(request):
     file_type = request.form['file_type']
     escore_threshold = float_or_none(request.form.get('escore_threshold_input'))
     iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
     zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))
     ranks_threshold = float_or_none(request.form.get('ranks_threshold_input'))
-    selected_threshold = {'escore': escore_threshold, 'iscore': iscore_threshold, 'zscore': zscore_threshold}[file_type]
+    selected_threshold = {consts.ESCORE: escore_threshold, consts.ISCORE: iscore_threshold, consts.ZSCORE: zscore_threshold}[file_type]
     return selected_threshold, ranks_threshold
 
 

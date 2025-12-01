@@ -18,11 +18,6 @@ function handleDelete(event, form) {
     .catch(error => console.error('Error:', error));
 }
 
-
-function redirectToIndex() {
-    window.location.href = '/';
-}
-
 function toggleAll(type) {
     const boxes = document.querySelectorAll("." + type + "-box");
     const master = document.getElementById("checkAll" + type.charAt(0).toUpperCase() + type.slice(1));

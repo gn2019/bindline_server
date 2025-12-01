@@ -119,3 +119,42 @@ th {
 .nav-big {
     font-size: 1.2rem;
 }
+
+.accordion-button:not(.collapsed) {
+    color: #0d6efd;            /* Bootstrap primary blue */
+    background-color: #e7f1ff; /* Light blue background */
+}
+
+footer {
+    border-top:1px solid #ccc;
+    background-color:#f8f9fa;
+    padding:20px;
+    font-size:0.85em;
+    color:#333;
+    text-align:center;
+    line-height:1.5;
+}
+
+.help-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 28px;
+    border: 1px solid #e5e5e5;
+}
+
+.help-section h4 {
+    margin-bottom: 18px;
+}
+
+.help-icon {
+    font-size: 1.3rem;
+    color: #0d6efd;
+    margin-right: 10px;
+}
+
+.img-col img {
+    max-width: 100%;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+}

@@ -1,3 +1,5 @@
+import itertools
+import os.path
 
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory, redirect, url_for, send_file
 from flask_cors import CORS
@@ -5,13 +7,15 @@ from flask_login import LoginManager, login_required, current_user
 import zipfile
 import ssl
 import json
-import os
 import io
 
+import auth
 import bindline
 import consts
+import files
 from database_setup import db, User
 from auth import auth_bp  # Import the authentication blueprint
+from files import files_bp  # Import the files blueprint
 from bindline_utils import *
 
 
@@ -38,66 +42,168 @@ def load_user(user_id):
 
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
+app.register_blueprint(files_bp, url_prefix='/files')
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FASTA_FOLDER'], exist_ok=True)
 os.makedirs(app.config['ESCORE_FOLDER'], exist_ok=True)
 
-escore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ESCORE_MATRIX_PKL,
-                                          rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
-zscore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ZSCORE_MATRIX_PKL,
-                                          rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
-iscore_identifier = bindline.TFIdentifier(absolute_hypo_file=consts.ISCORE_MATRIX_PKL,
-                                          rank_hypo_file=consts.ESCORE_RANK_MATRIX_PKL)
+public_identifiers = {
+    consts.ESCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ESCORE_MATRIX),
+                                    rank_hypo_file=get_public_matrix_path(consts.ESCORE_RANK_MATRIX)),
+    consts.ZSCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ZSCORE_MATRIX),
+                                    rank_hypo_file=get_public_matrix_path(consts.ESCORE_RANK_MATRIX)),
+    consts.ISCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ISCORE_MATRIX),
+                                    rank_hypo_file=get_public_matrix_path(consts.ESCORE_RANK_MATRIX))
+}
+
+user_identifiers = {}
 
 
 @login_required
 @app.route('/dashboard')
 def dashboard():
-    return render_template("dashboard.html", username=current_user.username,
-                           fasta_files=list_user_fasta_files(current_user.username, include_username=False),
-                           score_files=list_user_score_files(current_user.username, include_username=False))
+    return render_template("dashboard.html",
+                           is_authenticated=current_user.is_authenticated,
+                           fasta_files=list_user_fasta_file_names(current_user.username, include_username=False),
+                           score_files=list_user_score_file_names(current_user.username, include_username=False))
+
+
+def update_mats(file):
+    if file.file_type != files.FileType.SCORE or file.is_public or not current_user.is_authenticated:
+        return
+
+    load_user_identifiers()
+    file_path = get_file_path(file)
+
+    cols_order = [''.join(i) for i in itertools.product('ACGT', repeat=8)]
+    escore_file = bindline.UniProbeEScoreFile(open(file_path).read())
+    zscore_file = bindline.UniProbeZScoreFile(open(file_path).read())
+    iscore_file = bindline.UniProbeIScoreFile(open(file_path).read())
+    for name, tbl in {consts.ESCORE: escore_file, consts.ZSCORE: zscore_file, consts.ISCORE: iscore_file}.items():
+        try:
+            _, _, table = next(tbl.parse_tables())
+            df = pd.DataFrame([[table._dict[mer] for mer in cols_order]], index=[file.id], columns=cols_order)
+            if name in user_identifiers:
+                df = pd.concat([df, user_identifiers[name]._mat]).groupby(level=0).last()
+            df.to_pickle(get_user_matrix_path(name))
+        except Exception as e:
+            print(f"Error parsing {name} table for file {file.filename}: {e}")
+    try:
+        _, _, escore_table = next(escore_file.parse_tables())
+        ranks_df = pd.DataFrame(np.argsort(np.argsort([[escore_table._dict[mer] for mer in cols_order]])), index=[file.id], columns=cols_order)
+        if consts.ESCORE in user_identifiers:
+            ranks_df = pd.concat([user_identifiers[consts.ESCORE]._rank_mat, ranks_df]).groupby(level=0).last()
+        ranks_df.to_pickle(get_user_matrix_path(consts.ESCORE, ranks=True))
+    except Exception as e:
+        print(f"Error updating ranks matrix for file {file.filename}: {e}")
+
+    load_user_identifiers(force=True)
+
+
+def delete_from_mats(file):
+    if file.file_type != files.FileType.SCORE or file.is_public or not current_user.is_authenticated:
+        return
+
+    load_user_identifiers()
+    for name in consts.SCORES:
+        if name in user_identifiers:
+            identifier = user_identifiers[name]
+            if identifier._mat is not None and file.id in identifier._mat.index:
+                identifier._mat.drop(index=file.id, inplace=True)
+                identifier._mat.to_pickle(get_user_matrix_path(name))
+            if identifier._rank_mat is not None and file.id in identifier._rank_mat.index:
+                identifier._rank_mat.drop(index=file.id, inplace=True)
+                identifier._rank_mat.to_pickle(get_user_matrix_path(consts.ESCORE, ranks=True))
+
+
+
+def upload_and_update_db(file, file_type):
+    file_metadata = files.upload_metadata(file.filename, file_type, is_public=False)
+    if file_metadata:
+        file_path = get_file_path(file_metadata)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        file.save(file_path)
+        update_mats(file_metadata)
+        return file_metadata
 
 
 def get_score_files(request):
     if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
         # save them (it's a list of files)
-        score_files = request.files.getlist('e_score')
-        for score_file in score_files:
-            score_path = os.path.join(app.config['ESCORE_FOLDER'], score_file.filename)
-            score_file.save(score_path)
-        # take their names
-        return [f.filename for f in score_files]
+        if current_user.is_authenticated:
+            score_files = request.files.getlist('e_score')
+            for score_file in score_files:
+                file = upload_and_update_db(score_file, files.FileType.SCORE)
+                if not file:
+                    return jsonify({'error': f'Failed to upload score file {score_file.filename}.'}), 500
+            # take their names
+            return [(f.filename, get_file_path(f)) for f in score_files]
+        else:
+            return [(score_file.filename, (score_file.stream.seek(0) or io.TextIOWrapper(score_file.stream, encoding="utf-8")))
+                    for score_file in request.files.getlist('e_score')]
     else:
-        return [request.form[var] for var in request.form if var.startswith('e_score_')]
+        return [(request.form[var], get_file_path(files.get_file_by_id(request.form[var])))
+                for var in request.form if var.startswith('e_score_')]
+
+
+def load_user_identifiers(force=False):
+    if not current_user.is_authenticated:
+        user_identifiers.clear()
+        return
+    if 'dummy' in user_identifiers and not force:
+        return
+    user_identifiers['dummy'] = True  # just to mark that we loaded them
+
+    for name in consts.SCORES:
+        path = get_user_matrix_path_if_exists(name)
+        ranks_path = get_user_matrix_path_if_exists(name, ranks=True)
+        if path:
+            user_identifiers[name] = bindline.TFIdentifier(absolute_hypo_file=path, rank_hypo_file=ranks_path)
 
 
 def get_identifier_by_type(file_type):
-    if file_type == 'escore':
-        return escore_identifier
-    elif file_type == 'zscore':
-        return zscore_identifier
-    elif file_type == 'iscore':
-        return iscore_identifier
-    else:
+    if file_type not in public_identifiers:
         raise ValueError("Invalid file type selected.")
+    identifier = public_identifiers[file_type]
+    load_user_identifiers()
+    if file_type in user_identifiers:
+        identifier += user_identifiers[file_type]
+    return identifier
 
 
-@app.route('/list-files/<filetype>', methods=['GET'])
-def list_files(filetype):
+@app.route('/list-files/<file_type>', methods=['GET'])
+def list_files(file_type):
     """Lists public and user-specific files for FASTA or E-Score files."""
     username = current_user.username if current_user.is_authenticated else None
-    if filetype == 'fasta':
-        return jsonify(sum(list_user_public_fasta_files(username), []))
-    elif filetype == 'escore':
-        return jsonify(sum(list_user_public_score_files(username), []))
+    if file_type == consts.FASTA:
+        return jsonify(list_user_public_fasta_file_names(username))
+    elif file_type == consts.SCORE:
+        return jsonify(list_user_public_score_file_jsons())
     else:
         return jsonify({"error": "Invalid file type"}), 400
 
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html', is_authenticated=current_user.is_authenticated)
+    sample_id = request.args.get('sample_id')
+    return render_template('index.html', is_authenticated=current_user.is_authenticated, sample_id=sample_id)
+
+
+def get_file_folder(file):
+    if file.file_type == files.FileType.FASTA:
+        return app.config['FASTA_FOLDER']
+    if file.file_type == files.FileType.SCORE:
+        return app.config['ESCORE_FOLDER']
+    raise ValueError("Invalid file type")
+
+
+def get_file_user_uuid(file):
+    return consts.PUBLIC_DIR if file.is_public else auth.get_current_user_uuid()
+
+
+def get_file_path(file):
+    return os.path.join(get_file_folder(file), get_file_user_uuid(file), file.uuid)
 
 
 @app.route('/sequences', methods=['POST'])
@@ -107,10 +213,21 @@ def get_sequences():
 
     # Determine the FASTA file to use
     if fasta_file:
-        fasta_path = os.path.join(app.config['FASTA_FOLDER'], fasta_file.filename)
-        fasta_file.save(fasta_path)  # Save the uploaded file
+        if current_user.is_authenticated:
+            file = upload_and_update_db(fasta_file, files.FileType.FASTA)
+            if file:
+                fasta_path = get_file_path(file)
+            else:
+                return jsonify({'error': 'Failed to upload FASTA file.'}), 500
+        else:
+            # pass as a stream without saving
+            fasta_file.stream.seek(0)
+            fasta_path = io.TextIOWrapper(fasta_file.stream, encoding="utf-8")
     elif existing_fasta:
-        fasta_path = os.path.join(app.config['FASTA_FOLDER'], existing_fasta)
+        file = files.get_file_by_name(existing_fasta, files.FileType.FASTA)
+        if not file:
+            return jsonify({'error': 'FASTA file not found.'}), 404
+        fasta_path = get_file_path(file)
     else:
         return jsonify({'error': 'No FASTA file provided.'}), 400
 
@@ -126,7 +243,6 @@ def get_sequences():
     return jsonify({'sequences': sequences})
 
 
-@app.route('/find-binding-sites', methods=['GET'])
 def find_binding_sites():
     file_type = request.form['file_type']
     sequences = json.loads(request.form.get('sequences'))
@@ -139,21 +255,21 @@ def find_binding_sites():
     # Extract unique file paths of identified TFs
     # identified_TFs[seq_name] is a tuple where first value is the sequence
     # and the second is the list of lists of file paths
-    identified_unq_files = sum(sum(map(lambda s: s[1], identified_TFs.values()), []), [])
+    identified_unq_file_ids = sum(sum(map(lambda s: s[1], identified_TFs.values()), []), [])
 
     # Get the tables for each identified file
     identified_tables = {}
     identified_binding_sites = {}
-    for file in identified_unq_files:
-        file_path = os.path.join(app.config['ESCORE_FOLDER'], file)
-        _, _, identified_tables[file] = get_score_table(file_path, file_type)
-        score = identified_tables[file].score_seqs(sequences)
+    for file_id in identified_unq_file_ids:
+        file = files.get_file_by_id(file_id)
+        _, _, identified_tables[file.filename] = get_score_table(get_file_path(file), file_type)
+        score = identified_tables[file.filename].score_seqs(sequences)
 
-        identified_binding_sites[file] = {}
+        identified_binding_sites[file.filename] = {}
         for seq_name in identified_TFs:
-            curr_bs = [score[seq_name][1][i] if file in pos_ls else None
+            curr_bs = [score[seq_name][1][i] if file_id in pos_ls else None
                        for i, pos_ls in enumerate(identified_TFs[seq_name][1])]
-            _, _, identified_binding_sites[file][seq_name] = align_scores(sequences[ref_name], sequences[seq_name], curr_bs)
+            _, _, identified_binding_sites[file.filename][seq_name] = align_scores(sequences[ref_name], sequences[seq_name], curr_bs)
 
     # Compute the scores for each identified transcription factor (TF) across all sequences.
     # The dictionary has the following structure:
@@ -243,9 +359,7 @@ def find_significant_mutations():
     binding_sites = {}
     gaps, insertions = {}, {}
 
-    for score_file in score_files:
-        score_path = os.path.join(app.config['ESCORE_FOLDER'], score_file)
-
+    for score_file, score_path in score_files:
         name, motif, table = get_score_table(score_path, file_type)
         scores_dict = table.score_seqs(sequences)
 
@@ -337,9 +451,7 @@ def upload_files():
     if should_show_binding_sites:
         highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
 
-    for score_file in score_files:
-        score_path = os.path.join(app.config['ESCORE_FOLDER'], score_file)
-
+    for score_file, score_path in score_files:
         name, motif, table = get_score_table(score_path, file_type)
         scores_dict = table.score_seqs(sequences)
 
@@ -376,27 +488,49 @@ def upload_files():
     return jsonify(plot_data)
 
 
-@app.route('/delete_file/<file_type>/<file>', methods=['POST'])
+@app.route('/delete_file/<file_type>/<filename>', methods=['POST'])
 @login_required
-def delete_file(file_type, file):
-    if file_type == 'fasta':
-        file_path = os.path.join(app.config['FASTA_FOLDER'], current_user.username, file)
-    elif file_type == 'score':
-        file_path = os.path.join(app.config['ESCORE_FOLDER'], current_user.username, file)
-    else:
-        return jsonify({'error': 'Invalid file type'}), 400
+def delete_file(filename, file_type):
+    file_metadata = files.get_file_by_name(filename, file_type, is_public=False)
+    # delete from db
+    files.delete_file(file_metadata.uuid)
+    # delete from disk
+    file_path = get_file_path(file_metadata)
     if os.path.exists(file_path):
         os.remove(file_path)
+        delete_from_mats(file_metadata)
         return jsonify({'message': 'File deleted successfully'})
     else:
         return jsonify({'error': 'File not found'}), 404
 
 
-@app.route('/download-public/<file_type>/<file>')
-def download_public_file(file_type, file):
-    file_path = get_file_path(file_type, file, is_public=True)
+def get_download_name(filename):
+    if '.' not in os.path.basename(filename):
+        return filename + '.txt'
+    return filename
+
+
+def get_archive_name(file):
+    if file.dataset and file.publication:
+        return os.path.join(file.dataset, file.publication, get_download_name(file.filename))
+    if file.dataset:
+        return os.path.join(file.dataset, get_download_name(file.filename))
+    if file.publication:
+        return os.path.join(file.publication, get_download_name(file.filename))
+    return get_download_name(file.filename)
+
+
+@app.route('/download-public/<file_id>')
+def download_public_file(file_id):
+    file = files.get_file_by_id(file_id)
+    file_path = get_file_path(file)
     if os.path.exists(file_path):
-        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path), as_attachment=True)
+        file_path = os.path.abspath(file_path)
+        # avoid downloading if not in uploads
+        if not file_path.startswith(os.path.abspath(consts.UPLOAD_DIR)):
+            return jsonify({'error': 'File not found'}), 404
+        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path),
+                                   as_attachment=True, download_name=get_download_name(file.filename))
     else:
         return jsonify({'error': 'File not found'}), 404
 
@@ -404,55 +538,68 @@ def download_public_file(file_type, file):
 @app.route('/download/<file_type>/<file>')
 @login_required
 def download_file(file_type, file):
-    file_path = get_file_path(file_type, file, is_public=False)
+    file_path = get_file_path(files.get_file_by_name(file, file_type, is_public=False))
     if os.path.exists(file_path):
-        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path), as_attachment=True)
+        # send it with the original filename <file>
+        file_path = os.path.abspath(file_path)
+        # avoid downloading if not in uploads
+        if not file_path.startswith(os.path.abspath(consts.UPLOAD_DIR)):
+            return jsonify({'error': 'File not found'}), 404
+        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path),
+                                   as_attachment=True, download_name=get_download_name(file))
     else:
         return jsonify({'error': 'File not found'}), 404
 
 
-def get_file_path(file_type, f, is_public=False):
-    if file_type == 'fasta':
-        return os.path.join(app.config['FASTA_FOLDER'], 'public' if is_public else current_user.username, f)
-    elif file_type == 'score':
-        return os.path.join(app.config['ESCORE_FOLDER'], 'public' if is_public else current_user.username, f)
-    else:
-        raise ValueError("Invalid file type")
+# def get_file_path(file_type, f, is_public=False):
+#     if file_type == consts.FASTA:
+#         return os.path.join(app.config['FASTA_FOLDER'], consts.PUBLIC_DIR if is_public else current_user.username, f)
+#     elif file_type == consts.SCORE:
+#         return os.path.join(app.config['ESCORE_FOLDER'], consts.PUBLIC_DIR if is_public else current_user.username, f)
+#     else:
+#         raise ValueError("Invalid file type")
 
 
 @app.post("/bulk/<file_type>/<is_public>")
 def bulk_action(file_type, is_public=False):
-    files = request.form.getlist("files")
+    request_files = request.form.getlist("files")
     action = request.form["action"]
 
     if action == "delete":
-        for f in files:
-            delete_file(file_type, f)
+        for f in request_files:
+            delete_file(f, file_type)
         return redirect(url_for("dashboard"))
 
     if action == "download":
         # create a zip
         mem = io.BytesIO()
         with zipfile.ZipFile(mem, "w") as z:
-            for f in files:
-                path = get_file_path(file_type, f, is_public=is_public)
-                z.write(path, arcname=f)
+            for f in request_files:
+                file = files.get_file_by_id(f)
+                path = get_file_path(file)
+                z.write(path, arcname=get_archive_name(file))
         mem.seek(0)
         return send_file(mem, as_attachment=True, download_name="files.zip")
 
 
 @app.route("/help")
-def help():
-    return render_template("help.html")
+def help_page():
+    return render_template("help.html", is_authenticated=current_user.is_authenticated)
 
 
 @app.route("/data")
 def data_page():
-    return render_template(
-        "data.html",
-        fasta_files=list_public_fasta_files(include_username=False),
-        score_files=list_public_score_files(include_username=False)
+    return render_template("data.html",
+        is_authenticated=current_user.is_authenticated,
+        fasta_files=files.list_public_fasta_files(),
+        score_files=files.list_public_score_files()
     )
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static', 'icons'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 if __name__ == '__main__':

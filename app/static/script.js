@@ -1,6 +1,6 @@
 // Load existing E-Score files into dropdown and enable searchable multi-selection
 function loadExistingFiles() {
-    fetch('/list-files/escore')
+    fetch('/list-files/score')
         .then(response => response.json())
         .then(files => {
             const escoreDropdown = $('#existing_escore'); // Use jQuery selector for Select2
@@ -8,13 +8,24 @@ function loadExistingFiles() {
 
             // Populate options
             files.forEach(file => {
-                escoreDropdown.append(new Option(file, file, false, false));
+                escoreDropdown.append(new Option(file.filename, file.id, false, false));
             });
 
             // Initialize Select2 for searchable dropdown
             escoreDropdown.select2({
                 placeholder: "Select E-Score files",
-                allowClear: true
+                allowClear: true,
+
+                // Dropdown item
+                templateResult: function(fileOption) {
+                     if (!fileOption.id || fileOption.loading) {
+                        return fileOption.text;
+                    }
+                    return showScoreFile(files.find(f => f.id == fileOption.id));
+                },
+
+                // Selected item (collapsed box)
+                templateSelection: (file) => file.text
             });
         });
 
@@ -27,6 +38,36 @@ function loadExistingFiles() {
                 fastaDropdown.append(new Option(file, file, false, false));
             });
         });
+}
+
+function showScoreFile(file) {
+    // Build metadata elements only if the field exists
+    let metaParts = [];
+
+    if (file.dataset) {
+        metaParts.push(`<span>Dataset: ${file.dataset}</span>`);
+    }
+
+    if (file.publication) {
+        metaParts.push(`<span>Publication: ${file.publication}</span>`);
+    }
+
+    if (file.notes) {
+        metaParts.push(`<span>${file.notes}</span>`);
+    }
+
+    // Join metadata fields horizontally with gaps
+    const metaHtml = metaParts.length
+        ? `<div class="small text-muted d-flex gap-3 flex-wrap">${metaParts.join('')}</div>`
+        : "";
+
+    // Final item template
+    return $(`
+        <div class="d-flex flex-column">
+            <strong>${file.filename}</strong>
+            ${metaHtml}
+        </div>
+    `);
 }
 
 async function loadSequences() {
@@ -200,7 +241,6 @@ async function uploadAndPlot() {
         if (!$('#sequence-tbody tr').length) {
             await loadSequences();
             await new Promise(requestAnimationFrame); // Wait for the UI to update
-            console.log('loaded');
         }
         let selectedSequences = gatherSelectedSequences();
         const refName = getReferenceName(); // Now this will run after sequences are loaded
@@ -343,7 +383,6 @@ async function handlePlotData(plotData) {
 
     function toggleLoading(divId, show) {
         const spinner = document.getElementById(`${divId}-loading`);
-        console.log(spinner, spinner.id, show, spinner.style.display);
         if (spinner) {
             spinner.style.display = show ? 'block' : 'none';
         }
@@ -888,7 +927,7 @@ document.addEventListener("DOMContentLoaded", function () {
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', () => loadSequences());
-document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow());
+document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow(name=`seq_${Math.floor(Math.random() * 99999999)}`));
 // Handle uploading and plotting data from multiple E-Score files
 document.getElementById('upload-and-plot').addEventListener('click', () => uploadAndPlot());
 
@@ -925,55 +964,3 @@ async function updloadAndPlot() {
         .then(plotData => handlePlotData(plotData))
         .catch(handleError);
 }
-
-
-// uploadAndPlot();
-document.addEventListener("DOMContentLoaded", function () {
-    // Get the modal elements
-    const loginModal = document.getElementById("loginModal");
-    const registerModal = document.getElementById("registerModal");
-
-    // Get URLs from data attributes
-    const loginUrl = loginModal.getAttribute("data-url-login");
-    const registerUrl = registerModal.getAttribute("data-url-register");
-
-    // Handle login form submission
-    document.getElementById("loginForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const formData = new FormData(this);
-
-        fetch(loginUrl, {
-            method: "POST",
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                bootstrap.Modal.getInstance(loginModal).hide();  // Close modal
-                location.reload();
-            } else {
-                alert("Invalid credentials");
-            }
-        });
-    });
-
-    // Handle register form submission
-    document.getElementById("registerForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const formData = new FormData(this);
-
-        fetch(registerUrl, {
-            method: "POST",
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                bootstrap.Modal.getInstance(registerModal).hide();  // Close modal
-                location.reload();
-            } else {
-                alert("Registration failed: " + data.message);
-            }
-        });
-    });
-});

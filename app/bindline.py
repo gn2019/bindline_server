@@ -702,7 +702,14 @@ def mer8_to_dict(mer8_content, score_type='E'):
      }
     if cols_num not in score_column:
         if cols_num == 4:
-            score_column[cols_num] = {'E': 2, 'I': 3} if float(mer8_content[0][2]) <= 0.5 else {'I': 2, 'E': 3}
+            if float(mer8_content[0][2]) <= 0.5:
+                # if any negative
+                if any(float(i[2]) < 0 for i in mer8_content):
+                    score_column[cols_num] = {'E': 2, 'Z': 3}
+                else:
+                    score_column[cols_num] = {'E': 2, 'I': 3}
+            else:
+                score_column[cols_num] = {'I': 2, 'E': 3}
         else:
             raise ValueError('mer8 file has wrong number of columns')
     if score_type not in score_column[cols_num]:
@@ -730,19 +737,26 @@ def align_scores(scores_wt, scores_del):
     return min_i
 
 
+def get_seqs_from_fasta_stream(fasta_stream):
+    seqs = {}
+    for line in fasta_stream:
+        if not line.strip():
+            continue
+        if line.startswith('>'):
+            name = line[1:].strip()
+            seqs[name] = ''
+        else:
+            seqs[name] += line.strip()
+    return seqs
+
+
 def get_seqs_from_fasta(fasta_file):
     # return all sequences in fasta_file as a dict
-    seqs = {}
+    # if is already a stream, read from it
+    if hasattr(fasta_file, 'read'):
+        return get_seqs_from_fasta_stream(fasta_file)
     with open(fasta_file, 'r') as f:
-        for line in f:
-            if not line.strip():
-                continue
-            if line.startswith('>'):
-                name = line[1:].strip()
-                seqs[name] = ''
-            else:
-                seqs[name] += line.strip()
-    return seqs
+        return get_seqs_from_fasta_stream(f)
 
 class TFIdentifier:
     def __init__(self, hypo_file, kmer=8):
@@ -761,7 +775,7 @@ class TFIdentifier:
     def __call__(self, seqs):
         return {name: (seq, self.identify(seq)) for name, seq in seqs.items()}
 
-import time
+
 class TFIdentifier:
     def __init__(self, absolute_hypo_file=None, rank_hypo_file=None, kmer=8):
         assert absolute_hypo_file or rank_hypo_file, "At least one of the files should be provided"
@@ -801,3 +815,15 @@ class TFIdentifier:
             self._threshold_mat = self._rank_mat.where(self._rank_mat >= rank_threshold, np.nan)
 
         return {name: (seq, self.__identify(seq)) for name, seq in seqs.items()}
+
+    def __iadd__(self, other):
+        assert self._mer == other._mer, "Kmers must be the same to merge"
+
+        for attr in ['_mat', '_rank_mat']:
+            if not hasattr(other, attr):
+                continue
+            if hasattr(self, attr):
+                setattr(self, attr, pd.concat([getattr(self, attr), getattr(other, attr)]))
+            else:
+                setattr(self, attr, getattr(other, attr).copy())
+        return self
