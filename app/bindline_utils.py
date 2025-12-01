@@ -7,10 +7,10 @@ from Bio.Align import PairwiseAligner
 from flask_login import login_required
 from numpy.lib.stride_tricks import sliding_window_view
 
-import auth
-import consts
-import bindline
-import files
+from . import auth
+from . import consts
+from . import bindline
+from . import files
 
 
 def recursive_dir(path):

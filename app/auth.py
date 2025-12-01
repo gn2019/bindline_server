@@ -3,7 +3,8 @@ import uuid
 from flask import Blueprint, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from database_setup import db, User
+
+from .database_setup import db, User
 
 auth_bp = Blueprint('auth', __name__)
 

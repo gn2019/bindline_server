@@ -9,14 +9,14 @@ import ssl
 import json
 import io
 
-import auth
-import bindline
-import consts
-import files
-from database_setup import db, User
-from auth import auth_bp  # Import the authentication blueprint
-from files import files_bp  # Import the files blueprint
-from bindline_utils import *
+from . import auth
+from . import bindline
+from . import consts
+from . import files
+from .database_setup import db, User
+from .auth import auth_bp  # Import the authentication blueprint
+from .files import files_bp  # Import the files blueprint
+from .bindline_utils import *
 
 
 app = Flask(__name__)
@@ -24,11 +24,11 @@ CORS(app)
 app.config['UPLOAD_FOLDER'] = consts.UPLOAD_DIR
 app.config['FASTA_FOLDER'] = consts.FASTA_DIR
 app.config['ESCORE_FOLDER'] = consts.ESCORE_DIR
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.abspath(os.path.join(os.path.dirname(__file__), 'instance', 'database.db'))}"
 app.config['SECRET_KEY'] = 'GAIAEJKC@#QJTKKZ MEK J$KJFSZ WEFSFWAfewa'
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-context.load_cert_chain('cert.crt', 'priv.key')
+context.load_cert_chain('/etc/pki/tls/certs/bindline.weizmann.ac.il.crt', '/etc/pki/tls/private/bindline.weizmann.ac.il.key')
 
 db.init_app(app)
 login_manager = LoginManager()
@@ -143,8 +143,13 @@ def get_score_files(request):
             return [(score_file.filename, (score_file.stream.seek(0) or io.TextIOWrapper(score_file.stream, encoding="utf-8")))
                     for score_file in request.files.getlist('e_score')]
     else:
-        return [(request.form[var], get_file_path(files.get_file_by_id(request.form[var])))
-                for var in request.form if var.startswith('e_score_')]
+        score_files = []
+        for var in request.form:
+            if var.startswith('e_score_'):
+                file_id = int(request.form[var])
+                file = files.get_file_by_id(file_id)
+                score_files.append((file.filename, get_file_path(file)),)
+        return score_files
 
 
 def load_user_identifiers(force=False):

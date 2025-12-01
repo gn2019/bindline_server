@@ -3,7 +3,7 @@ import uuid
 from flask import flash, Blueprint, request
 from flask_login import login_required, current_user
 
-from database_setup import db, File, FileType
+from .database_setup import db, File, FileType
 
 # create blueprint for file operations
 files_bp = Blueprint('files', __name__)
