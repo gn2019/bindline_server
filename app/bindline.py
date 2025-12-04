@@ -30,10 +30,10 @@ MER8_HIGHEST = 0.45
 
 
 class ExpFile:
-    def __init__(self, zip_file, pwm=True, escore=True):
+    def __init__(self, zip_file, pwm=True, score=True):
         self.zip_ref = zipfile.ZipFile(zip_file, 'r')
         self.pwm = pwm
-        self.escore = escore
+        self.score = score
 
     def namelist(self):
         return self.zip_ref.namelist()
@@ -44,30 +44,30 @@ class ExpFile:
     def get_pwm_file_type(self):
         raise NotImplementedError
 
-    def get_escore_file_type(self):
+    def get_score_file_type(self):
         raise NotImplementedError
 
     def get_pwm_files(self):
         # return all pwm files in the zip
         raise NotImplementedError
 
-    def get_escore_files(self):
-        # return all escore files in the zip
+    def get_score_files(self):
+        # return all score files in the zip
         raise NotImplementedError
 
     def parse_pwm_files(self):
         for fn in self.get_pwm_files():
             yield fn, self.get_pwm_file_type()(self.read(fn))
 
-    def parse_escore_files(self):
-        for fn in self.get_escore_files():
-            yield fn, self.get_escore_file_type()(self.read(fn))
+    def parse_score_files(self):
+        for fn in self.get_score_files():
+            yield fn, self.get_score_file_type()(self.read(fn))
 
     def iterfiles(self):
         if self.pwm:
             yield from self.parse_pwm_files()
-        if self.escore:
-            yield from self.parse_escore_files()
+        if self.score:
+            yield from self.parse_score_files()
 
     def itertables(self, relevant_proteins=None):
         for fn, result_file in self.iterfiles():
@@ -100,7 +100,7 @@ class Cisbp(ExpFile):
     def get_pwm_files(self):
         return [i for i in self.namelist() if i == 'PWM.txt']
 
-    def get_escore_files(self):
+    def get_score_files(self):
         return [i for i in self.namelist() if i == 'EScore.txt']
 
     def get_motif_to_name_dict(self):
@@ -115,21 +115,21 @@ class Cisbp(ExpFile):
     def get_pwm_file_type(self):
         return CisbpPWMFile
 
-    def get_escore_file_type(self):
-        return CisbpEScoreFile
+    def get_score_file_type(self):
+        return CisbpScoreFile
 
 
 class UniProbe(ExpFile):
     def get_pwm_files(self):
         return [i for i in self.namelist() if 'pwm' in i.lower()]
 
-    def get_escore_files(self):
+    def get_score_files(self):
         return [i for i in self.namelist() if '8mer' in i.lower() and 'enrich' not in i.lower()]
 
     def get_pwm_file_type(self):
         return UniProbePWMFile
 
-    def get_escore_file_type(self):
+    def get_score_file_type(self):
         return UniProbeEScoreFile
 
 
@@ -223,25 +223,25 @@ class IScoreFile(ResultFile):
         return IScoreTable
 
 
-class CisbpEScoreFile(EScoreFile):
+class CisbpScoreFile(EScoreFile):
     def __init__(self, content, motif_to_name_dict=None):
         super().__init__(content)
         self._motif_to_name_dict = motif_to_name_dict
 
     def get_tables(self, relevant_proteins=None):
-        escore = pd.read_csv(StringIO(self.content.replace('\r', '')), sep='\t')
-        escore["rev"] = escore["joinID"].str.replace(
+        score = pd.read_csv(StringIO(self.content.replace('\r', '')), sep='\t')
+        score["rev"] = score["joinID"].str.replace(
             'A', 't').str.replace('T', 'a').str.replace('C', 'g').str.replace('G', 'c').str[::-1].str.upper()
         # not "joinID" and not "rev" columns
-        for col in escore.columns[1:-1]:
+        for col in score.columns[1:-1]:
             name_ext = col.split(':')[2].split('=')[0]
             name = name_ext.split('_')[0]
             if name.isdigit():
                 name = self._motif_to_name_dict.get(col.split(':')[0]) or name
             if relevant_proteins and name.lower() not in relevant_proteins:
                 continue
-            escore_table = escore[["joinID", "rev", col]].to_csv(sep='\t', header=None, index=None)
-            yield name, name_ext, escore_table
+            score_table = score[["joinID", "rev", col]].to_csv(sep='\t', header=None, index=None)
+            yield name, name_ext, score_table
 
 
 class UniProbeEScoreFile(EScoreFile):
@@ -347,7 +347,6 @@ class EScoreTable(ResultTable):
         # get the threshold of the relative threshold
         sorted_scores = sorted(self._dict.values())
         return sorted_scores[int(len(sorted_scores) * relative_threshold / 100)]
-
 
 
 class ZScoreTable(EScoreTable):

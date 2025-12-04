@@ -23,12 +23,14 @@ app = Flask(__name__)
 CORS(app)
 app.config['UPLOAD_FOLDER'] = consts.UPLOAD_DIR
 app.config['FASTA_FOLDER'] = consts.FASTA_DIR
-app.config['ESCORE_FOLDER'] = consts.ESCORE_DIR
+app.config['SCORE_FOLDER'] = consts.SCORE_DIR
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.abspath(os.path.join(os.path.dirname(__file__), 'instance', 'database.db'))}"
 app.config['SECRET_KEY'] = 'GAIAEJKC@#QJTKKZ MEK J$KJFSZ WEFSFWAfewa'
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-context.load_cert_chain('/etc/pki/tls/certs/bindline.weizmann.ac.il.crt', '/etc/pki/tls/private/bindline.weizmann.ac.il.key')
+with open("config.json") as f:
+    cfg = json.load(f)
+context.load_cert_chain(cfg["ssl_cert"], cfg["ssl_key"])
 
 db.init_app(app)
 login_manager = LoginManager()
@@ -46,7 +48,7 @@ app.register_blueprint(files_bp, url_prefix='/files')
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FASTA_FOLDER'], exist_ok=True)
-os.makedirs(app.config['ESCORE_FOLDER'], exist_ok=True)
+os.makedirs(app.config['SCORE_FOLDER'], exist_ok=True)
 
 public_identifiers = {
     consts.ESCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ESCORE_MATRIX),
@@ -129,10 +131,10 @@ def upload_and_update_db(file, file_type):
 
 
 def get_score_files(request):
-    if 'e_score' in request.files and request.files.getlist('e_score')[0].filename:
+    if 'score' in request.files and request.files.getlist('score')[0].filename:
         # save them (it's a list of files)
         if current_user.is_authenticated:
-            score_files = request.files.getlist('e_score')
+            score_files = request.files.getlist('score')
             for score_file in score_files:
                 file = upload_and_update_db(score_file, files.FileType.SCORE)
                 if not file:
@@ -141,11 +143,11 @@ def get_score_files(request):
             return [(f.filename, get_file_path(f)) for f in score_files]
         else:
             return [(score_file.filename, (score_file.stream.seek(0) or io.TextIOWrapper(score_file.stream, encoding="utf-8")))
-                    for score_file in request.files.getlist('e_score')]
+                    for score_file in request.files.getlist('score')]
     else:
         score_files = []
         for var in request.form:
-            if var.startswith('e_score_'):
+            if var.startswith('score_'):
                 file_id = int(request.form[var])
                 file = files.get_file_by_id(file_id)
                 score_files.append((file.filename, get_file_path(file)),)
@@ -199,7 +201,7 @@ def get_file_folder(file):
     if file.file_type == files.FileType.FASTA:
         return app.config['FASTA_FOLDER']
     if file.file_type == files.FileType.SCORE:
-        return app.config['ESCORE_FOLDER']
+        return app.config['SCORE_FOLDER']
     raise ValueError("Invalid file type")
 
 
@@ -560,7 +562,7 @@ def download_file(file_type, file):
 #     if file_type == consts.FASTA:
 #         return os.path.join(app.config['FASTA_FOLDER'], consts.PUBLIC_DIR if is_public else current_user.username, f)
 #     elif file_type == consts.SCORE:
-#         return os.path.join(app.config['ESCORE_FOLDER'], consts.PUBLIC_DIR if is_public else current_user.username, f)
+#         return os.path.join(app.config['SCORE_FOLDER'], consts.PUBLIC_DIR if is_public else current_user.username, f)
 #     else:
 #         raise ValueError("Invalid file type")
 

@@ -28,7 +28,7 @@ def recursive_dir_under_root(root, path, include_dirname=True):
 
 def list_user_score_file_names(username, include_username=True):
     return [f.filename for f in files.list_user_score_files()]
-    return recursive_dir_under_root(consts.ESCORE_DIR, username, include_dirname=include_username) if username else []
+    return recursive_dir_under_root(consts.SCORE_DIR, username, include_dirname=include_username) if username else []
 
 
 def list_user_fasta_file_names(username, include_username=True):
@@ -178,7 +178,7 @@ def get_score_table(file_path, file_type):
 
 
 def get_public_matrix_path(filename):
-    return os.path.join(consts.ESCORE_DIR, consts.PUBLIC_DIR, filename)
+    return os.path.join(consts.SCORE_DIR, consts.PUBLIC_DIR, filename)
 
 
 @login_required
@@ -191,7 +191,7 @@ def get_user_matrix_path(name, ranks=False):
             consts.ZSCORE: consts.ZSCORE_MATRIX,
             consts.ISCORE: consts.ISCORE_MATRIX
         }[name]
-    path = os.path.join(consts.ESCORE_DIR, auth.get_current_user_uuid(), filename)
+    path = os.path.join(consts.SCORE_DIR, auth.get_current_user_uuid(), filename)
     return path
 
 

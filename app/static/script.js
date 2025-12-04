@@ -3,16 +3,16 @@ function loadExistingFiles() {
     fetch('/list-files/score')
         .then(response => response.json())
         .then(files => {
-            const escoreDropdown = $('#existing_escore'); // Use jQuery selector for Select2
-            escoreDropdown.empty(); // Clear previous options
+            const scoreDropdown = $('#existing_score'); // Use jQuery selector for Select2
+            scoreDropdown.empty(); // Clear previous options
 
             // Populate options
             files.forEach(file => {
-                escoreDropdown.append(new Option(file.filename, file.id, false, false));
+                scoreDropdown.append(new Option(file.filename, file.id, false, false));
             });
 
             // Initialize Select2 for searchable dropdown
-            escoreDropdown.select2({
+            scoreDropdown.select2({
                 placeholder: "Select E-Score files",
                 allowClear: true,
 
@@ -299,7 +299,7 @@ function appendSequencesAndOptions(formData, selectedSequences, refName) {
     formData.append('search_binding_sites', document.getElementById('search-binding-sites').checked);
 
     appendThresholds(formData);
-    appendEScoreFiles(formData);
+    appendScoreFiles(formData);
 }
 
 /** Append thresholds to formData */
@@ -319,17 +319,17 @@ function appendThresholds(formData) {
 }
 
 /** Append selected E-Score files to formData */
-function appendEScoreFiles(formData) {
+function appendScoreFiles(formData) {
     const searchBindingSites = document.getElementById('search-binding-sites').checked;
     if (!searchBindingSites) {
-        const selectedFiles = Array.from(document.getElementById('existing_escore').selectedOptions).map(option => option.value);
-        const uploadedFile = document.getElementById('e_score').files[0];
+        const selectedFiles = Array.from(document.getElementById('existing_score').selectedOptions).map(option => option.value);
+        const uploadedFile = document.getElementById('score').files[0];
 
         if (!uploadedFile && selectedFiles.length === 0) {
             throw new Error('Please select at least one E-Score file.');
         }
 
-        selectedFiles.forEach((file, index) => formData.append(`e_score_${index}`, file));
+        selectedFiles.forEach((file, index) => formData.append(`score_${index}`, file));
     }
 }
 
@@ -399,6 +399,7 @@ async function handlePlotData(plotData) {
             const layout = component.layoutFunc(metadata);
 
             await Plotly.newPlot(div, traces, layout);
+            console.log("TITLE CHECK:", div.layout.xaxis?.title, div.layout.yaxis?.title);
 
             toggleLoading(component.id, false); // Hide spinner
 
@@ -956,7 +957,7 @@ async function updloadAndPlot() {
     formData.append('search_significant_mutations', 'true');
     formData.append('search_binding_sites', 'false');
     formData.append('ranks_threshold_input', '99');
-    formData.append('e_score_0', "IRF1_Normalized_7mers_1111111.txt");
+    formData.append('score_0', "IRF1_Normalized_7mers_1111111.txt");
     formData.forEach((value, key) => console.log(key, value));
 
     await fetch('/upload', { method: 'POST', body: formData })

@@ -78,7 +78,7 @@ async function setExistingScore(choices) {
     if (!Array.isArray(choices)) {
         choices = [choices];
     }
-    await setSelect2BoxValue('existing_escore', choices);
+    await setSelect2BoxValue('existing_score', choices);
 }
 
 
