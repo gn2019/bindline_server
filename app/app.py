@@ -250,9 +250,14 @@ def get_sequences():
     return jsonify({'sequences': sequences})
 
 
+def get_sequences_from_request(request):
+    sequences = json.loads(request.form.get('sequences'))
+    return {name: seq.upper() for name, seq in sequences.items()}
+
+
 def find_binding_sites():
     file_type = request.form['file_type']
-    sequences = json.loads(request.form.get('sequences'))
+    sequences = get_sequences_from_request(request)
     selected_threshold, ranks_threshold = get_thresholds(request)
     ref_name = request.form['ref_name']
     # identify by both identifiers, and combine
@@ -348,7 +353,7 @@ def find_binding_sites():
 
 def find_significant_mutations():
     file_type = request.form['file_type']
-    sequences = json.loads(request.form.get('sequences'))
+    sequences = get_sequences_from_request(request)
     assert len(sequences) == 1, "Only one sequences are allowed for this analysis."  # checked in js
     selected_threshold, ranks_threshold = get_thresholds(request)
     assert selected_threshold is not None or ranks_threshold is not None, \
@@ -443,7 +448,7 @@ def upload_files():
         return find_significant_mutations()
 
     file_type = request.form['file_type']
-    sequences = json.loads(request.form.get('sequences'))
+    sequences = get_sequences_from_request(request)
     score_files = get_score_files(request)
     ref_name = request.form['ref_name']
 
