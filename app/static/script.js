@@ -364,7 +364,7 @@ async function handlePlotData(plotData) {
     console.log(plotData); // TODO: remove
 
     const plotComponents = {
-        bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout },
+        bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout, legendFunc: handleLegendClick },
         bindingSites: { id: 'binding-sites-plot', checkFunc: plotData => plotData.binding_sites, traceFunc: createBindingSiteTraces, layoutFunc: getBindingSitesPlotLayout },
         allMutants: { id: 'all-mutants-plot', checkFunc: plotData => plotData.mutants_effect, traceFunc: createAllMutantsTraces, layoutFunc: getAllMutantsPlotLayout }
     };
@@ -399,11 +399,13 @@ async function handlePlotData(plotData) {
             const layout = component.layoutFunc(metadata);
 
             await Plotly.newPlot(div, traces, layout);
-            console.log("TITLE CHECK:", div.layout.xaxis?.title, div.layout.yaxis?.title);
 
             toggleLoading(component.id, false); // Hide spinner
 
             div.sequence_str = plotData.sequence_strs[plotData.ref_name];
+            if (component.legendFunc) {
+                component.legendFunc(div);
+            }
             div.on('plotly_afterplot', () => setXTicks(div));
             setXTicks(div);
 
@@ -421,6 +423,100 @@ async function handlePlotData(plotData) {
     setTimeout(() => {
         syncPlots(Object.values(plotComponents).map(component => component.div));
     }, 500);
+}
+
+function handleLegendClick(plotDiv) {
+    plotDiv.on('plotly_legendclick', (e) => {
+        const trace = plotDiv.data[e.curveNumber];
+
+        if (trace.isMetaProtein) {
+            toggleProtein(plotDiv, trace.protein);
+            return false;
+        }
+
+        if (trace.isMetaSequence) {
+            toggleSequence(plotDiv, trace.sequence);
+            setTimeout(() => enforceLegendRules(plotDiv), 0);
+            return false;
+        }
+
+        setTimeout(() => enforceLegendRules(plotDiv, trace), 0);
+        return true;
+    });
+}
+
+
+function enforceLegendRules(plotDiv, trace=null) {
+    const data = plotDiv.data;
+
+    // Track which proteins still have visible sequences
+    const proteinHasVisibleSeq = {};
+
+    // Pass 1 — detect visible sequences per protein
+    data.forEach(seqTrace => {
+        if (seqTrace.isMaxScore || seqTrace.isMetaProtein) return;
+        if ((seqTrace === trace && !isVisible(seqTrace)) || (seqTrace !== trace && isVisible(seqTrace))) {
+            proteinHasVisibleSeq[seqTrace.protein] = true;
+        }
+    });
+    let isMaxVisible = false;
+    for (const metaMaxScoreTrace of data) {
+        if (metaMaxScoreTrace.isMaxScore && metaMaxScoreTrace.isMetaSequence) {
+            isMaxVisible = isVisible(metaMaxScoreTrace);
+            break;
+        }
+    }
+    if (isMaxVisible) {
+        data.forEach((maxScoreTrace, i) => {
+            if (!maxScoreTrace.isMaxScore || maxScoreTrace.isMetaSequence) return;
+            const shouldShow = proteinHasVisibleSeq[maxScoreTrace.protein];
+            Plotly.restyle(plotDiv, {visible: !!shouldShow}, [i]);
+        });
+    }
+}
+
+
+function isVisible(trace) {
+    return trace.visible !== false && trace.visible !== "legendonly";
+}
+
+function areThereVisibleIndices(plotDiv, indices) {
+    return indices.some(i => isVisible(plotDiv.data[i]));
+}
+
+
+function toggleProtein(plotDiv, protein) {
+    const indices = [];
+    plotDiv.data.forEach((trace, i) => {
+        if (trace.protein === protein && !trace.isMetaProtein) {
+            indices.push(i);
+        }
+    });
+    const shouldDim = areThereVisibleIndices(plotDiv, indices);
+    // find the meta-protein trace and dim it if should
+    for (const [i, trace] of plotDiv.data.entries())  {
+        if (trace.protein === protein && trace.isMetaProtein) {
+            indices.push(i);
+        }
+    }
+    Plotly.restyle(plotDiv, { visible: shouldDim ? "legendonly" : true }, indices);
+}
+
+
+function toggleSequence(plotDiv, sequence) {
+    const indices = [];
+    plotDiv.data.forEach((trace, i) => {
+        if (trace.sequence === sequence && !trace.isMetaSequence) {
+            indices.push(i);
+        }
+    });
+    const shouldDim = areThereVisibleIndices(plotDiv, indices);
+    for (const [i, trace] of plotDiv.data.entries())  {
+        if (trace.sequence === sequence && trace.isMetaSequence) {
+            indices.push(i);
+        }
+    }
+    Plotly.restyle(plotDiv, { visible: shouldDim ? "legendonly" : true }, indices);
 }
 
 
@@ -446,9 +542,13 @@ function createTraces(plotData) {
                 y: alignedScores,
                 mode: 'lines',
                 name: `${seqName} (${fileName})`,
-                legendgroup: `${seqName} (${fileName})`,
                 type: 'scatter',
-                line: {color: colorPalette[seqIndex % colorPalette.length]}
+                line: {color: colorPalette[seqIndex % colorPalette.length]},
+                legendrank: 4,
+                protein: fileName,
+                sequence: seqName,
+                isMetaProtein: false,
+                isMetaSequence: false,
             };
             traces.push(trace);
 
@@ -476,10 +576,72 @@ function createTraces(plotData) {
             x: [0, Math.max(...Object.values(fileScores).map(s => s.length))],
             y: [maxScore, maxScore],
             mode: 'lines',
-            name: `Max Score (${fileName})`,
-            line: { dash: 'dash', color: colorPalette[0] }
+            name: 'Maximal Score',
+            showlegend: false,
+            line: { dash: 'dash', color: colorPalette[0] },
+            protein: fileName,
+            isMaxScore: true,
+            sequence: null,
         };
         traces.push(maxScoreLine);
+
+        traces.push({
+            x: [null],
+            y: [null],
+            mode: "lines",
+            name: `Protein: ${fileName}`,
+            line: { color: colorPalette[0] },
+            protein: fileName,
+            isMetaProtein: true,
+            showlegend: true,
+            legendrank: 0,
+        });
+    });
+    traces.push({
+        x: [null],
+        y: [null],
+        mode: "lines",
+        name: "────────────",
+        showlegend: true,
+        hoverinfo: "skip",
+        legendrank: 1,     // place it between ranks
+        line: { color: "rgba(0,0,0,0)" }
+    });
+    Object.keys(plotData.aligned_seqs).forEach((seqName, seqIndex) => {
+        traces.push({
+            x: [null],
+            y: [null],
+            mode: "lines",
+            name: `Sequence: ${seqName}`,
+            sequence: seqName,
+            isMetaSequence: true,
+            line: { color: 'black' },
+            showlegend: true,
+            legendrank: 2,
+        });
+    });
+    // one more for the max-score
+    traces.push({
+        x: [null],
+        y: [null],
+        mode: "lines",
+        name: `Maximal Score`,
+        line: { dash: 'dash', color: 'black' },
+        isMaxScore: true,
+        isMetaSequence: true,
+        sequence: null,
+        showlegend: true,
+        legendrank: 2,
+    });
+        traces.push({
+        x: [null],
+        y: [null],
+        mode: "lines",
+        name: "────────────",
+        showlegend: true,
+        hoverinfo: "skip",
+        legendrank: 3,     // place it between ranks
+        line: { color: "rgba(0,0,0,0)" }
     });
     return [traces, null];
 }
@@ -500,6 +662,7 @@ function createBindingSiteTraces(plotData) {
 
             bindingSites.forEach(range => {
                 const [start, end, seq, bsStart, bsEnd, isAdded] = range;
+                const color = isAdded ? `rgba(${hexToRGB(colorPalette[seqIndex % colorPalette.length])}, 0.5)` : 'rgba(211, 211, 211, 0.5)';
 
                 // Add the binding site trace
                 bindingSiteTraces.push({
@@ -507,13 +670,25 @@ function createBindingSiteTraces(plotData) {
                     y: [yLabel, yLabel], // Use categorical label directly
                     mode: 'lines',
                     line: {
-                        color: isAdded ? `rgba(${hexToRGB(colorPalette[seqIndex % colorPalette.length])}, 0.5)` : 'rgba(211, 211, 211, 0.5)',
+                        color: color,
                         width: 10
                     },
                     name: yLabel,
                     legendgroup: yLabel,
                     hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`, // Tooltip
                     showlegend: false // Show the legend only for the first trace of a file/sequence
+                });
+                bindingSiteTraces.push({
+                    x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
+                    y: Array(end - start + 1).fill(yLabel),
+                    mode: "markers",
+                    marker: {
+                        color: color,
+                        size: 15,
+                        opacity: 0   // fully invisible
+                    },
+                    hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`,
+                    showlegend: false
                 });
 
                 const gaps = plotData.gaps[fileName][seqName];
@@ -528,8 +703,8 @@ function createBindingSiteTraces(plotData) {
                             width: 6
                         },
                         showlegend: false,
-                        // disable hover for gaps
-                        hoverinfo: 'skip'
+                        // hoverinfo: 'skip',  // disable hover for gaps
+                        hovertemplate: `deletion (${gapStart}-${gapEnd})<extra></extra>`,
                     });
                 });
 
@@ -547,7 +722,7 @@ function createBindingSiteTraces(plotData) {
                             color: 'rgba(0, 0, 0, 0.5)',
                         },
                         showlegend: false,
-                        hovertemplate: `${ins}<extra></extra>`,
+                        hovertemplate: `${ins} insertion<extra></extra>`,
                     });
                 });
             });
@@ -569,8 +744,8 @@ function hexToRGB(hex) {
 
 function getBindlinePlotLayout() {
     return {
-        xaxis: { title: 'Position' },
-        yaxis: { title: 'Score' },
+        xaxis: { title: {text: 'Position' }},
+        yaxis: { title: {text: 'Score' }},
         hovermode: 'closest',
         showlegend: true,
     };
@@ -593,7 +768,7 @@ function createAllMutantsTraces(plotData) {
                 x: [parseInt(position)],
                 y: [effect],
                 mode: "markers",
-                marker: { color: nucleotideColors[nuc], symbol: nucleotideShapes[refNuc], size: 4, alpha: 0.8 },
+                marker: { color: nucleotideColors[nuc], symbol: nucleotideShapes[refNuc], size: 10, alpha: 0.8 },
                 name: `${nuc} at ${position}`,
                 showlegend: false,
             });
@@ -631,24 +806,24 @@ function createAllMutantsTraces(plotData) {
 
 function getAllMutantsPlotLayout() {
     const layout = {
-        xaxis: { title: "Position", tickmode: "linear" },
-        yaxis: { title: "Effect (ΔScore)" },
+        xaxis: { title: {text: "Position" }, tickmode: "linear" },
+        yaxis: { title: {text: "Effect (ΔScore)" }},
         template: "plotly_white"
     };
     return layout;
     return {
-        xaxis: { title: 'Position' },
-        yaxis: { title: 'Score' },
+        xaxis: { title: {text: 'Position' }},
+        yaxis: { title: {text: 'Score' }},
         hovermode: 'closest',
         showlegend: true,
     };
 }
 
 function getBindingSitesPlotLayout(yLabels) {
-    const baseHeight = 300; // Minimum height for axes and margins when there are no labels
+    const baseHeight = 200; // Minimum height for axes and margins when there are no labels
     const labelHeight = 30; // Height allocated per label
     return {
-        xaxis: { title: 'Position' },
+        xaxis: { title: {text: 'Position' }},
         yaxis: {
             type: 'category', // Use categorical y-axis
             categoryarray: yLabels, // Explicitly specify the y-axis order
@@ -660,7 +835,7 @@ function getBindingSitesPlotLayout(yLabels) {
         hovermode: 'closest',
         showlegend: true,
         // TODO: makes problems with the annotations
-        // height: baseHeight + labelHeight * yLabels.length, // Adjust height based on number of labels
+        height: baseHeight + labelHeight * yLabels.length, // Adjust height based on number of labels
     };
 }
 
@@ -692,6 +867,8 @@ function syncPlots(plots) {
         }
     };
 
+    // if only one plot, return
+    if (plots.length < 2) return;
     // Attach the same sync handler to all plots
     plots.forEach(plot => {
         plot.on('plotly_afterplot', () => syncRange(plot));
@@ -747,12 +924,20 @@ function get_gaps(aligned_seq) {
 }
 
 let isSettingTicks = {}; // Flag to prevent recursion
+let prevRange = [0, 0]; // Flag to prevent self-calls
 function setXTicks(plotDiv) {
     if (isSettingTicks[plotDiv.id]) return; // Avoid recursive calls
     isSettingTicks[plotDiv.id] = true; // Set the flag to indicate we're inside the function
 
     // x-axis range of the plot
     let [xStart, xEnd] = plotDiv.layout.xaxis.range;
+    if (xStart === prevRange[0] && xEnd === prevRange[1]) {
+        isSettingTicks[plotDiv.id] = false; // Reset the flag before returning
+        return; // No change in range
+    } else {
+        prevRange[0] = xStart;
+        prevRange[1] = xEnd;
+    }
     xStart = Math.max(0, Math.ceil(xStart));
     xEnd = Math.min(plotDiv.sequence_str.length, Math.floor(xEnd + 1));
 
@@ -944,20 +1129,27 @@ for (let threshold of ['escore', 'zscore', 'iscore', 'ranks']) {
     syncSliderAndInput(`${threshold}_threshold_slider`, `${threshold}_threshold_input`);
 }
 
-async function updloadAndPlot() {
+async function uplfoadAndPlot() {
     showGlobalLoading(); // Show loading animation before request
 
     const formData = new FormData(document.getElementById('upload-form'));
     formData.append('sequences', JSON.stringify({
-        "WT":"AAAGCTGCTCTCAGTTTTTCAAGTCACACACACACACACACACACACACTCACACACACGGGTGGGGGAGTGTCTGTCATGGACACAGCTGTGTCAGTGTGGTTGCTCAGAGATCTGAGTTGCTCTAGCACTAGGTGCAGTTTATTTCACAGCCCTAAAGAGATTTACGGCTGTTTTTTCTTCATTGGGGCCAAACATGGGGCCTGATAGGGAGGGCGTTGCACCAAAGGCAACAGAGACTACCATGAAAGTCCCTACAAACCTAACCTGAGCAGAGGACTGAAGAATGCAGAAAGGGACACTCAGGTAACAGACCATGGGACATAACAGCCATCTGTTGCTGGCCTTGGGTCTGATAAGGTCTCAGGGGCTGAAGGTGTAGGTTCAAAACACCTGGATCTTCGGAGCTCTGAGAGTACTTCATGCTATCACCACAAGCAAGGGGTCAGTTTTCTGCATGTCCTTGCTTGTCATGTGCCTAGGAATCCCACAGCCAGCTCATCCACTAAGCAGGGATAAGTTGACTCTGGGGCACCTGGAGGACCTGTTCTAGACCTCCACGTCCTAGCTCCGTTATTTCCATCACCTGCAGGATTGCACACTGTCACCCCCCCCCCAACACCCCCAGACGACGCGTCTTGCGTCTCAGGGGCACACCACTGGCTTCTGTGTCGCCCACTCCTCTCCACTCCCCACAGGCTCATCCGGACGATCCACGTGCAGCTCGACCGGGGGTTGGCGCCGCACCTCGAGCCCGGCGCGTCTGGCCGGAGCTTTCTGGGGACCCGAACCCCCCAACCCCCGCGAGAGGGCGGCATCTGGCGACCGCGGGTCGGGCAGGGGGGCGTCCTAAAGTCCCCTGCGGTGCAGAGACGTTGCGGCCGGCTGCCACACAAAGGCGGCGGCGGGAAGGCGGGGCGGGGCGGGCCGGGGGGCGGGGGAGGCAGGAAGGGGCGGGGGCGGCGGCGGCGATAAAGCCCCCGCGCGGCCCGGCCGGCTA",
+        //"WT":"AAAGCTGCTCTCAGTTTTTCAAGTCACACACACACACACACACACACACTCACACACACGGGTGGGGGAGTGTCTGTCATGGACACAGCTGTGTCAGTGTGGTTGCTCAGAGATCTGAGTTGCTCTAGCACTAGGTGCAGTTTATTTCACAGCCCTAAAGAGATTTACGGCTGTTTTTTCTTCATTGGGGCCAAACATGGGGCCTGATAGGGAGGGCGTTGCACCAAAGGCAACAGAGACTACCATGAAAGTCCCTACAAACCTAACCTGAGCAGAGGACTGAAGAATGCAGAAAGGGACACTCAGGTAACAGACCATGGGACATAACAGCCATCTGTTGCTGGCCTTGGGTCTGATAAGGTCTCAGGGGCTGAAGGTGTAGGTTCAAAACACCTGGATCTTCGGAGCTCTGAGAGTACTTCATGCTATCACCACAAGCAAGGGGTCAGTTTTCTGCATGTCCTTGCTTGTCATGTGCCTAGGAATCCCACAGCCAGCTCATCCACTAAGCAGGGATAAGTTGACTCTGGGGCACCTGGAGGACCTGTTCTAGACCTCCACGTCCTAGCTCCGTTATTTCCATCACCTGCAGGATTGCACACTGTCACCCCCCCCCCAACACCCCCAGACGACGCGTCTTGCGTCTCAGGGGCACACCACTGGCTTCTGTGTCGCCCACTCCTCTCCACTCCCCACAGGCTCATCCGGACGATCCACGTGCAGCTCGACCGGGGGTTGGCGCCGCACCTCGAGCCCGGCGCGTCTGGCCGGAGCTTTCTGGGGACCCGAACCCCCCAACCCCCGCGAGAGGGCGGCATCTGGCGACCGCGGGTCGGGCAGGGGGGCGTCCTAAAGTCCCCTGCGGTGCAGAGACGTTGCGGCCGGCTGCCACACAAAGGCGGCGGCGGGAAGGCGGGGCGGGGCGGGCCGGGGGGCGGGGGAGGCAGGAAGGGGCGGGGGCGGCGGCGGCGATAAAGCCCCCGCGCGGCCCGGCCGGCTA",
+        "WT":"TGGCTTGGGCAAGCAAACCACAACAATGGTCAGACTGATAAAGCCCCT",
+        "del":"TGGCTTGGGCAAGCAAACCACAATGGTCAGACTGATAAAGCCCCT"
     }));
     formData.append('ref_name', "WT");
-    formData.append('file_type', 'zscore');
+    formData.append('file_type', 'escore');
     formData.append('show_diff_only', 'false');
-    formData.append('search_significant_mutations', 'true');
+    formData.append('search_significant_mutations', 'false');
     formData.append('search_binding_sites', 'false');
-    formData.append('ranks_threshold_input', '99');
-    formData.append('score_0', "IRF1_Normalized_7mers_1111111.txt");
+    // formData.append('ranks_threshold_input', '90');
+    formData.append('score_0', 36);
+    formData.append('score_1', 137);
+    // formData.append('score_2', 137);
+    // formData.append('score_3', 138);
+    // formData.append('score_4', 139);
+    // formData.append('score_5', 140);
     formData.forEach((value, key) => console.log(key, value));
 
     await fetch('/upload', { method: 'POST', body: formData })
