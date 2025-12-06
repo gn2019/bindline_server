@@ -118,32 +118,32 @@ def align_scores(ref_seq, seq, scores):
 
 
 def align_sequences_by_name(name, seq):
-    name = name.split('_')[-1]
-    typ = name[0]
-    if typ == 'm':
+    name = name.split(' ')[-3:]
+    typ = name[-1]
+    if typ == 'mutation':
         return seq
-    if typ == 'i':
-        pos = int(name[1:-1])
+    if typ == 'insertion':
+        pos = int(name[-3])
         # lower the letter in the position of the insertion
         return seq[:pos] + seq[pos].lower() + seq[pos+1:]
-    if typ == 'd':
-        pos = int(name[1:])
+    elif typ == 'deletion':
+        pos = int(name[-2])
         return seq[:pos] + '-' + seq[pos:]
     raise ValueError("Invalid mutation type.")
 
 
 def align_scores_by_name(name, seq, scores):
-    name = name.split('_')[-1]
-    typ = name[0]
+    name = name.split(' ')[-3:]
+    typ = name[-1]
     aligned_pos = list(range(len(seq)))
-    if typ == 'm':
+    if typ == 'mutation':
         return seq, aligned_pos, list(scores)
-    elif typ == 'i':
-        pos = int(name[1:-1])
+    elif typ == 'insertion':
+        pos = int(name[-3])
         aligned_pos.insert(pos, pos - 0.5)
         return seq, aligned_pos, list(scores)
-    elif typ == 'd':
-        pos = int(name[1:])
+    elif typ == 'deletion':
+        pos = int(name[-2])
         aligned_pos.append(len(aligned_pos))
         # concat the scores with None in the position of the deletion
         return seq[:pos] + '-' + seq[pos:], aligned_pos, list(scores[:pos]) + [None] + list(scores[pos:])
@@ -214,34 +214,34 @@ def get_all_point_mutations(sequence):
     for i, base in enumerate(sequence):
         for c in consts.DNA_BASES:
             if base != c:
-                mutants[f'm{i}{c}'] = sequence[:i] + c + sequence[i + 1:]
+                mutants[f'{i} {base}->{c} mutation'] = sequence[:i] + c + sequence[i + 1:]
     return mutants
 
 
 def get_all_insertions(sequence):
-    mutants = {f'i0{c}': c + sequence for c in consts.DNA_BASES}
+    mutants = {f'0 {c} insertion': c + sequence for c in consts.DNA_BASES}
     for i, base in enumerate(sequence):
         for c in consts.DNA_BASES:
             if base != c:
-                mutants[f'i{i+1}{c}'] = sequence[:i+1] + c + sequence[i+1:]
+                mutants[f'{i+1} {c} insertion'] = sequence[:i+1] + c + sequence[i+1:]
     return mutants
 
 
 def get_all_deletions(sequence):
     mutants = {}
     for i, base in enumerate(sequence):
-        mutants[f'd{i}'] = sequence[:i] + sequence[i + 1:]
+        mutants[f'{i} deletion'] = sequence[:i] + sequence[i + 1:]
     return mutants
 
 
 def get_all_mutants(name, sequence):
     mutants = {name: sequence}
     for suffix, seq in get_all_point_mutations(sequence).items():
-        mutants[f'{name}_{suffix}'] = seq
+        mutants[f'{name}: {suffix}'] = seq
     for suffix, seq in get_all_insertions(sequence).items():
-        mutants[f'{name}_{suffix}'] = seq
+        mutants[f'{name}: {suffix}'] = seq
     for suffix, seq in get_all_deletions(sequence).items():
-        mutants[f'{name}_{suffix}'] = seq
+        mutants[f'{name}: {suffix}'] = seq
     return mutants
 
 
