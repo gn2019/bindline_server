@@ -585,41 +585,56 @@ function createTraces(plotData) {
         };
         traces.push(maxScoreLine);
 
+        // if more than one protein, add a meta-protein trace
+        if (Object.keys(plotData.aligned_scores).length > 1) {
+            traces.push({
+                x: [null],
+                y: [null],
+                mode: "lines",
+                name: `Protein: ${fileName}`,
+                line: { color: colorPalette[0] },
+                protein: fileName,
+                isMetaProtein: true,
+                showlegend: true,
+                legendrank: 0,
+            });
+        }
+    });
+    // if more than one protein, add a separator trace
+    if (Object.keys(plotData.aligned_scores).length > 1) {
         traces.push({
             x: [null],
             y: [null],
             mode: "lines",
-            name: `Protein: ${fileName}`,
-            line: { color: colorPalette[0] },
-            protein: fileName,
-            isMetaProtein: true,
+            name: "────────────",
             showlegend: true,
-            legendrank: 0,
+            hoverinfo: "skip",
+            legendrank: 1,     // place it between ranks
+            line: { color: "rgba(0,0,0,0)" }
         });
+    }
+    // collect sequences that have lines
+    const sequencesWithLines = [];
+    Object.keys(plotData.aligned_seqs).forEach((seqName) => {
+        if (traces.some(trace => trace.sequence === seqName && !trace.isMetaSequence)) {
+            sequencesWithLines.push(seqName);
+        }
     });
-    traces.push({
-        x: [null],
-        y: [null],
-        mode: "lines",
-        name: "────────────",
-        showlegend: true,
-        hoverinfo: "skip",
-        legendrank: 1,     // place it between ranks
-        line: { color: "rgba(0,0,0,0)" }
-    });
-    Object.keys(plotData.aligned_seqs).forEach((seqName, seqIndex) => {
-        traces.push({
-            x: [null],
-            y: [null],
-            mode: "lines",
-            name: `Sequence: ${seqName}`,
-            sequence: seqName,
-            isMetaSequence: true,
-            line: { color: 'black' },
-            showlegend: true,
-            legendrank: 2,
+    if (sequencesWithLines.length > 1) {
+        sequencesWithLines.forEach((seqName) => {
+            traces.push({
+                x: [null],
+                y: [null],
+                mode: "lines",
+                name: `Sequence: ${seqName}`,
+                sequence: seqName,
+                isMetaSequence: true,
+                line: { color: 'black' },
+                showlegend: true,
+                legendrank: 2,
+            });
         });
-    });
+    }
     // one more for the max-score
     traces.push({
         x: [null],
@@ -633,7 +648,7 @@ function createTraces(plotData) {
         showlegend: true,
         legendrank: 2,
     });
-        traces.push({
+    traces.push({
         x: [null],
         y: [null],
         mode: "lines",
@@ -651,7 +666,7 @@ function createBindingSiteTraces(plotData) {
     const colorPalettes = getColorPalettes(); // Get color palettes for consistent coloring
     const yLabels = []; // Store unique y-axis labels
 
-    Object.entries(plotData.binding_sites).forEach(([fileName, fileBindingSites], fileIndex) => {
+    Object.entries(plotData.binding_sites).reverse().forEach(([fileName, fileBindingSites], fileIndex) => {
         const colorPalette = colorPalettes[fileIndex % colorPalettes.length];
 
         Object.entries(fileBindingSites).forEach(([seqName, bindingSites], seqIndex) => {
