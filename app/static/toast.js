@@ -1,4 +1,4 @@
-function showToast(type, message, delay = 5000) {
+function showToast(type, message, delay = 100000000000) {
     const toastContainer = document.getElementById("toastContainer");
 
     let bgClass = "text-bg-primary";
