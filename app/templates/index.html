@@ -24,52 +24,68 @@
         <!-- Collapsible Form Container -->
         <div id="upload-form-container" class="collapse show">
             <form id="upload-form">
-            <table class="table table-borderless align-middle mb-3">
-                <tr>
-                    <td><h6 class="fw-bold mt-3">Score File(s):</h6></td>
-                    <td>
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center flex-wrap">
+                        <h6 class="fw-bold me-5 mt-2">Protein</h6>
+                        <ul class="nav nav-pills nav-sm" id="score-tabs-nav" role="tablist">
+                          <li class="nav-item">
+                            <button type="button" class="nav-link active" data-bs-toggle="pill" data-bs-target="#score-existing">Existing</button>
+                          </li>
+                          <li class="nav-item">
+                            <button type="button" class="nav-link" data-bs-toggle="pill" data-bs-target="#score-upload">Upload</button>
+                          </li>
+                          <li class="nav-item">
+                            <button type="button" class="nav-link" data-bs-toggle="pill" data-bs-target="#score-search">Search for Binding Sites across All Proteins</button>
+                          </li>
+                        </ul>
+                    </div>
+                    <div id="score-tabs" class="tab-content">
+                      <!-- Existing -->
+                      <div class="tab-pane fade show active" id="score-existing">
+                        <select id="existing_score" multiple="multiple" style="width: 100%;" class="form-select form-select-sm" size="5"></select>
+                      </div>
+                      <!-- Upload -->
+                      <div class="tab-pane fade" id="score-upload">
                         <input class="form-control form-control-sm" type="file" id="score" name="score" multiple>
-                    </td>
-                    <td><label for="existing_score" class="form-label mb-0">Or Existing:</label></td>
-                    <td>
-			<select id="existing_score" multiple="multiple" style="width: 100%;" class="form-select form-select-sm" size="5"></select>
-                    </td>
-                    <td>
-                        <!-- checkbox for searching binding sites -->
-                        <div class="form-check form-check-inline">
-                            <input class="form-check input" type="checkbox" id="search-binding-sites" name="search-binding-sites">
-                            <label class="form-check label" for="search-binding-sites">Search for Binding Sites across All Proteins</label>
+                      </div>
+                      <div class="tab-pane fade" id="score-search"></div>
+                    </div>
+                  </div>
+                  <div class="col-md-6 flex-column">
+                    <div class="d-flex align-items-center flex-wrap">
+                      <h6 class="fw-bold me-5 mt-2">DNA</h6>
+                      <ul class="nav nav-pills nav-sm" id="fasta-tabs-nav" role="tablist">
+                        <li class="nav-item">
+                          <button type="button" class="nav-link active" data-bs-toggle="pill" data-bs-target="#fasta-existing">Existing</button>
+                        </li>
+                        <li class="nav-item">
+                          <button type="button" class="nav-link" data-bs-toggle="pill" data-bs-target="#fasta-upload">Upload</button>
+                        </li>
+                      </ul>
+                    </div>
+                    <div class="d-flex align-items-start gap-2">
+                      <div id="fasta-tabs" class="tab-content flex-grow-1">
+                        <!-- Existing -->
+                        <div class="tab-pane fade show active" id="fasta-existing">
+                          <select class="form-select form-select-sm" id="existing_fasta">
+                              <option value="">-- Select Existing --</option>
+                          </select>
                         </div>
-                    </td>
-                </tr>
-                <tr>
-                    <td><h6 class="fw-bold mt-3">FASTA File:</h6></td>
-                    <td>
-                        <input class="form-control form-control-sm" type="file" id="fasta" name="fasta">
-                    </td>
-                    <td><label for="existing_fasta" class="form-label mb-0">Or Existing:</label></td>
-                    <td>
-                        <select class="form-select form-select-sm" id="existing_fasta">
-                            <option value="">-- Select Existing --</option>
-                        </select>
-                    </td>
-                    <td>
-                        <!-- checkbox for searching significant mutations -->
-                        <div class="form-check form-check-inline">
-                            <input class="form-check input" type="checkbox" id="search-significant-mutations" name="search-significant-mutations">
-                            <label class="form-check label" for="search-significant-mutations">Search for Significant Point Mutations</label>
+                        <!-- Upload -->
+                        <div class="tab-pane fade" id="fasta-upload">
+                          <input class="form-control form-control-sm" type="file" id="fasta" name="fasta">
                         </div>
-                    </td>
-                    <td>
-                        <button class="btn btn-primary btn-sm" type="button" id="load-sequences">Load Sequences</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <h6 class="fw-bold mt-3">File Type:</h6>
-                    </td>
-                    <td>
-                        <div class="btn-group w-10">
+                      </div>
+                      <button class="btn btn-primary btn-sm" type="button" id="load-sequences">Load Sequences</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="row mt-4">
+                  <div class="col-md-3">
+                    <div class="d-flex align-items-center flex-wrap">
+                        <h6 class="fw-bold mt-3">Score Type:</h6>
+                        <div class="btn-group w-10 mt-2">
                             <input type="radio" class="btn-check" name="file_type" id="escore" value="escore" checked>
                             <label class="btn btn-outline-primary" for="escore">E-Score</label>
                             <input type="radio" class="btn-check" name="file_type" id="zscore" value="zscore">
@@ -77,53 +93,59 @@
                             <input type="radio" class="btn-check" name="file_type" id="iscore" value="iscore">
                             <label class="btn btn-outline-primary" for="iscore">I-Score</label>
                         </div>
-                    </td>
-                    <td colspan="2">
-                        <div class="d-flex mb-3">
-                            <!-- E-Score Threshold -->
-                            <div id="escore_threshold" class="align-items-center mb-2">
-                                <input type="checkbox" id="enable_escore_threshold" class="form-check-input me-2">
-                                <label for="enable_escore_threshold" class="form-label me-2">E-Score Threshold:</label>
-                                <input type="range" min="0.3" max="0.5" step="0.01" value="0.45" id="escore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                                <input type="number" min="-0.5" max="0.5" step="0.01" value="0.45" id="escore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-                            </div>
-
-                            <!-- Z-Score Threshold -->
-                            <div id="zscore_threshold" class="align-items-center mb-2">
-                                <input type="checkbox" id="enable_zscore_threshold" class="form-check-input me-2">
-                                <label for="enable_zscore_threshold" class="form-label me-2">Z-Score Threshold:</label>
-                                <input type="range" min="15" max="25" step="0.5" value="18" id="zscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                                <input type="number" min="0" max="50" step="0.5" value="18" id="zscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-                            </div>
-
-                            <!-- I-Score Threshold -->
-                            <div id="iscore_threshold" class="align-items-center mb-2">
-                                <input type="checkbox" id="enable_iscore_threshold" class="form-check-input me-2">
-                                <label for="enable_iscore_threshold" class="form-label me-2">I-Score Threshold:</label>
-                                <input type="range" min="0" max="65536" step="1" value="60000" id="iscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                                <input type="number" min="0" max="65536" step="1" value="60000" id="iscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-                            </div>
-
-                            <!-- Ranks Threshold -->
-                            <div id="ranks_threshold" class="d-flex align-items-center mb-2">
-                                <input type="checkbox" id="enable_ranks_threshold" class="form-check-input me-2">
-                                <label for="enable_ranks_threshold" class="form-label me-2">Ranks Threshold:</label>
-                                <input type="range" min="95" max="100" step="0.1" value="99" id="ranks_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                                <input type="number" min="0" max="100" step="0.1" value="99" id="ranks_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
-                            </div>
+                    </div>
+                  </div>
+                  <div class="col-md-9">
+                    <div class="d-flex mb-3">
+                        <!-- E-Score Threshold -->
+                        <div id="escore_threshold" class="align-items-center mb-2">
+                            <input type="checkbox" id="enable_escore_threshold" class="form-check-input me-2" hidden>
+                            <label for="enable_escore_threshold" class="btn btn-light me-2">E-Score Threshold:</label>
+                            <input type="range" min="0.3" max="0.5" step="0.01" value="0.45" id="escore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                            <input type="number" min="-0.5" max="0.5" step="0.01" value="0.45" id="escore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
                         </div>
-                    </td>
-                    <td>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check input" type="checkbox" id="show-diff-only" name="show-diff-only">
-                            <label class="form-check label" for="show-diff-only">Show Diff from Reference Sequence Only</label>
-                        </div>
-                    </td>
-                </tr>
-            </table>
 
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <button class="btn btn-secondary btn-sm me-2" type="button" id="add-sequence-row">Add Sequence</button>
+                        <!-- Z-Score Threshold -->
+                        <div id="zscore_threshold" class="align-items-center mb-2">
+                            <input type="checkbox" id="enable_zscore_threshold" class="form-check-input me-2" hidden>
+                            <label for="enable_zscore_threshold" class="btn btn-light me-2">Z-Score Threshold:</label>
+                            <input type="range" min="15" max="25" step="0.5" value="18" id="zscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                            <input type="number" min="0" max="50" step="0.5" value="18" id="zscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                        </div>
+
+                        <!-- I-Score Threshold -->
+                        <div id="iscore_threshold" class="align-items-center mb-2">
+                            <input type="checkbox" id="enable_iscore_threshold" class="form-check-input me-2" hidden>
+                            <label for="enable_iscore_threshold" class="btn btn-light me-2">I-Score Threshold:</label>
+                            <input type="range" min="0" max="65536" step="1" value="60000" id="iscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                            <input type="number" min="0" max="65536" step="1" value="60000" id="iscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                        </div>
+
+                        <!-- & sign -->
+                        <div class="align-items-center ms-3 me-3 mt-1">
+                            <span class="fw-bold" style="font-size: x-large;"> &amp; </span>
+                        </div>
+
+                        <!-- Ranks Threshold -->
+                        <div id="ranks_threshold" class="d-flex align-items-center mb-2">
+                            <input type="checkbox" id="enable_ranks_threshold" class="form-check-input me-2" hidden>
+                            <label for="enable_ranks_threshold" class="btn btn-light me-2">Ranks Threshold:</label>
+                            <input type="range" min="95" max="100" step="0.1" value="99" id="ranks_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
+                            <input type="number" min="0" max="100" step="0.1" value="99" id="ranks_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+            <div class="d-flex justify-content-between align-content-center mb-2">
+                <div class="form-check form-check-inline">
+                    <input class="form-check input" type="checkbox" id="search-significant-mutations" name="search-significant-mutations">
+                    <label class="form-check label mt-2" for="search-significant-mutations">Search for Significant Point Mutations</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check input" type="checkbox" id="show-diff-only" name="show-diff-only">
+                    <label class="form-check label mt-2" for="show-diff-only">Show Diff from Reference Sequence Only</label>
+                </div>
+
                 <button class="btn btn-success btn-sm ms-2" type="button" id="upload-and-plot">
                     {% if is_authenticated %}
                     	Upload & Plot
@@ -134,7 +156,7 @@
             </div>
 
             <div class="form-group mt-2">
-                <table class="table table-bordered table-striped table-sm" id="sequence-table">
+                <table class="table table-bordered table-striped table-sm mb-1" id="sequence-table">
                     <thead class="table-light">
                         <tr>
                             <th>Plot</th>
@@ -147,6 +169,7 @@
                         <!-- Rows will be dynamically added here -->
                     </tbody>
                 </table>
+                <button class="btn btn-secondary btn-xs" type="button" id="add-sequence-row">+</button>
             </div>
         </form>
         </div>

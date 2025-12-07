@@ -13,8 +13,9 @@ function loadExistingFiles() {
 
             // Initialize Select2 for searchable dropdown
             scoreDropdown.select2({
-                placeholder: "Select E-Score files",
+                placeholder: "Select Score files",
                 allowClear: true,
+                dropdownPosition: "below",
 
                 // Dropdown item
                 templateResult: function(fileOption) {
@@ -71,16 +72,22 @@ function showScoreFile(file) {
 }
 
 async function loadSequences() {
-    const fastaFile = document.getElementById('fasta').files[0];
-    const existingFastaSelect = document.getElementById('existing_fasta');
-
+    const fastaSource = getActiveTab('fasta-tabs');
     let formData = new FormData();
-    if (fastaFile) {
+    if (fastaSource === 'fasta-upload') {
+        const fastaFile = document.getElementById('fasta').files[0];
+        if (!fastaFile) {
+            throw new Error("Please upload a FASTA file first.");
+        }
         formData.append('fasta', fastaFile);
-    } else if (existingFastaSelect.value) {
+    } else if (fastaSource === 'fasta-existing') {
+        const existingFastaSelect = document.getElementById('existing_fasta');
+        if (!existingFastaSelect.value) {
+            throw new Error("Please select a FASTA file first.");
+        }
         formData.append('existing_fasta', existingFastaSelect.value);
     } else {
-        throw new Error("Please select a FASTA file first.");
+        throw new Error("Select or upload a FASTA file.");
     }
 
     await fetch('/sequences', {
@@ -246,7 +253,7 @@ async function uploadAndPlot() {
         const refName = getReferenceName(); // Now this will run after sequences are loaded
 
         appendSequencesAndOptions(formData, selectedSequences, refName);
-        validateConditions(selectedSequences);
+        validateConditions(formData, selectedSequences);
     } catch (error) {
         alert(error);
         hideGlobalLoading();
@@ -296,7 +303,6 @@ function appendSequencesAndOptions(formData, selectedSequences, refName) {
     formData.append('ref_name', refName);
     formData.append('show_diff_only', document.getElementById('show-diff-only').checked);
     formData.append('search_significant_mutations', document.getElementById('search-significant-mutations').checked);
-    formData.append('search_binding_sites', document.getElementById('search-binding-sites').checked);
 
     appendThresholds(formData);
     appendScoreFiles(formData);
@@ -318,24 +324,43 @@ function appendThresholds(formData) {
     }
 }
 
+
+function getActiveTab(containerId) {
+    const activeTab = document.querySelector(`#${containerId} div.active`);
+    return activeTab ? activeTab.id : null;
+}
+
+
 /** Append selected E-Score files to formData */
 function appendScoreFiles(formData) {
-    const searchBindingSites = document.getElementById('search-binding-sites').checked;
-    if (!searchBindingSites) {
+    // get the active tab name in score_source
+    const scoreSource = getActiveTab('score-tabs');
+    if (scoreSource === 'score-existing') {
         const selectedFiles = Array.from(document.getElementById('existing_score').selectedOptions).map(option => option.value);
-        const uploadedFile = document.getElementById('score').files[0];
-
-        if (!uploadedFile && selectedFiles.length === 0) {
+        if (selectedFiles.length === 0) {
             throw new Error('Please select at least one E-Score file.');
         }
-
         selectedFiles.forEach((file, index) => formData.append(`score_${index}`, file));
+        return;
     }
+    if (scoreSource === 'score-upload') {
+        const uploadedFile = document.getElementById('score').files;
+        if (uploadedFile.length === 0) {
+            throw new Error('Please upload at least one Score file.');
+        }
+        return;
+    }
+    if (scoreSource === 'score-search') {
+        formData.append('search_binding_sites', true);
+        return;
+    }
+    throw new Error('Select protein files, upload files, or search across all proteins.');
 }
 
 /** Validate preconditions and alert user if conditions are not met */
-function validateConditions(selectedSequences) {
-    const searchSignificantMutations = document.getElementById('search-significant-mutations').checked;
+function validateConditions(formData, selectedSequences) {
+    const searchBindingSites = formData.get('search_binding_sites', 'false') === 'true';
+    const searchSignificantMutations = formData.get('search_significant_mutations') === 'true';
     if (searchSignificantMutations && Object.keys(selectedSequences).length !== 1) {
         throw new Error('Please select only one sequence for searching significant mutations.');
     }
@@ -347,7 +372,7 @@ function validateConditions(selectedSequences) {
         'enable_iscore_threshold'
     ].some(id => document.getElementById(id).checked);
 
-    if ((searchSignificantMutations || document.getElementById('search-binding-sites').checked) && !thresholdsEnabled) {
+    if ((searchSignificantMutations || searchBindingSites) && !thresholdsEnabled) {
         throw new Error('Please enable at least one threshold.');
     }
 }
@@ -1021,11 +1046,14 @@ function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
 // Function to toggle slider and input enabled/disabled state using the checkbox
 function toggleSliderAndInput(checkboxId, sliderId, inputId) {
     const checkbox = document.getElementById(checkboxId);
+    const label = document.querySelector(`label[for="${checkboxId}"]`);
     const slider = document.getElementById(sliderId);
     const input = document.getElementById(inputId);
 
     checkbox.addEventListener('change', function () {
         const isEnabled = checkbox.checked;
+        label.classList.remove(isEnabled ? 'btn-light' : 'btn-secondary');
+        label.classList.add(isEnabled ? 'btn-secondary' : 'btn-light');
         slider.disabled = !isEnabled;
         input.disabled = !isEnabled;
     });
