@@ -200,7 +200,7 @@ def get_user_matrix_path_if_exists(*args, **kwargs):
     return path if os.path.exists(path) else None
 
 def get_thresholds(request):
-    file_type = request.form['file_type']
+    file_type = request.form.get('file_type')
     escore_threshold = float_or_none(request.form.get('escore_threshold_input'))
     iscore_threshold = float_or_none(request.form.get('iscore_threshold_input'))
     zscore_threshold = float_or_none(request.form.get('zscore_threshold_input'))

@@ -12,8 +12,8 @@ files_bp = Blueprint('files', __name__)
 @files_bp.route('/upload', methods=['POST'])
 def upload_metadata_route():
     print(request.form)
-    filename = request.form['filename']
-    file_type = FileType[request.form['file_type']]
+    filename = request.form.get('filename')
+    file_type = FileType[request.form.get('file_type')]
     is_public = request.form.get('is_public', 'false').lower() == 'true'
     success, new_file = upload_metadata(filename, file_type, is_public)
     if success:
@@ -24,8 +24,8 @@ def upload_metadata_route():
 
 @files_bp.route('/delete', methods=['POST'])
 def delete_file_route():
-    filename = request.form['filename']
-    file_type = FileType[request.form['file_type']]
+    filename = request.form.get('filename')
+    file_type = FileType[request.form.get('file_type')]
     file = get_file_by_name(filename, file_type)
     if not file:
         return {'success': False, 'error': 'File not found'}, 404
@@ -45,8 +45,8 @@ def get_name_by_uuid(uuid):
 
 @files_bp.route('/get_file', methods=['POST'])
 def get_file_by_name_route():
-    filename = request.form['filename']
-    file_type = FileType[request.form['file_type']]
+    filename = request.form.get('filename')
+    file_type = FileType[request.form.get('file_type')]
     file = get_file_by_name(filename, file_type)
     if file:
         return {

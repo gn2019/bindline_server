@@ -40,7 +40,7 @@ def handle_registration(username, password):
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    return handle_registration(request.form['username'], request.form['password'])
+    return handle_registration(request.form.get('username'), request.form.get('password'))
 
 
 @auth_bp.route('/get_uuid', methods=['GET'])
@@ -78,7 +78,7 @@ def handle_login(username, password):
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    return handle_login(request.form['username'], request.form['password'])
+    return handle_login(request.form.get('username'), request.form.get('password'))
 
 
 @auth_bp.route('/logout')

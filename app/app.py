@@ -135,12 +135,14 @@ def get_score_files(request):
         # save them (it's a list of files)
         if current_user.is_authenticated:
             score_files = request.files.getlist('score')
+            stored_files = []
             for score_file in score_files:
                 file = upload_and_update_db(score_file, files.FileType.SCORE)
                 if not file:
                     return jsonify({'error': f'Failed to upload score file {score_file.filename}.'}), 500
+                stored_files.append(file)
             # take their names
-            return [(f.filename, get_file_path(f)) for f in score_files]
+            return [(file.filename, get_file_path(file)) for file in stored_files]
         else:
             return [(score_file.filename, (score_file.stream.seek(0) or io.TextIOWrapper(score_file.stream, encoding="utf-8")))
                     for score_file in request.files.getlist('score')]
@@ -256,10 +258,10 @@ def get_sequences_from_request(request):
 
 
 def find_binding_sites():
-    file_type = request.form['file_type']
+    file_type = request.form.get('file_type')
     sequences = get_sequences_from_request(request)
     selected_threshold, ranks_threshold = get_thresholds(request)
-    ref_name = request.form['ref_name']
+    ref_name = request.form.get('ref_name')
     # identify by both identifiers, and combine
     identifier = get_identifier_by_type(file_type)
     identified_TFs = identifier(sequences, absolute_threshold=selected_threshold, rank_threshold=ranks_threshold)
@@ -318,7 +320,7 @@ def find_binding_sites():
                 get_binding_sites(identified_binding_sites[score_file][name],
                                   aligned_seqs[name], table.mer, aligned_positions[name]))
 
-    if request.form['show_diff_only'] == 'true':
+    if request.form.get('show_diff_only') == 'true':
         show_diff_only(binding_sites, ref_name)
         # remove the sequences that have no binding sites except of the ref
         for file, bss in binding_sites.items():
@@ -352,14 +354,14 @@ def find_binding_sites():
 
 
 def find_significant_mutations():
-    file_type = request.form['file_type']
+    file_type = request.form.get('file_type')
     sequences = get_sequences_from_request(request)
     assert len(sequences) == 1, "Only one sequences are allowed for this analysis."  # checked in js
     selected_threshold, ranks_threshold = get_thresholds(request)
     assert selected_threshold is not None or ranks_threshold is not None, \
         "Either score or rank threshold must be provided."   # checked in js
 
-    ref_name = request.form['ref_name']
+    ref_name = request.form.get('ref_name')
     sequences = get_all_mutants(*next(iter(sequences.items())))
     score_files = get_score_files(request)
 
@@ -442,15 +444,15 @@ def find_significant_mutations():
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    if request.form['search_binding_sites'] == 'true':
+    if request.form.get('search_binding_sites') == 'true':
         return find_binding_sites()
-    if request.form['search_significant_mutations'] == 'true':
+    if request.form.get('search_significant_mutations') == 'true':
         return find_significant_mutations()
 
-    file_type = request.form['file_type']
+    file_type = request.form.get('file_type')
     sequences = get_sequences_from_request(request)
     score_files = get_score_files(request)
-    ref_name = request.form['ref_name']
+    ref_name = request.form.get('ref_name')
 
     aligned_scores = {}
     aligned_seqs = {}
@@ -459,7 +461,7 @@ def upload_files():
 
     selected_threshold, ranks_threshold = get_thresholds(request)
     should_show_binding_sites = selected_threshold is not None or ranks_threshold is not None
-    should_show_diff_only = should_show_binding_sites and request.form['show_diff_only'] == 'true'
+    should_show_diff_only = should_show_binding_sites and request.form.get('show_diff_only') == 'true'
     if should_show_binding_sites:
         highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
 
@@ -575,7 +577,7 @@ def download_file(file_type, file):
 @app.post("/bulk/<file_type>/<is_public>")
 def bulk_action(file_type, is_public=False):
     request_files = request.form.getlist("files")
-    action = request.form["action"]
+    action = request.form.get("action")
 
     if action == "delete":
         for f in request_files:
