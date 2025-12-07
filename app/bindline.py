@@ -776,18 +776,23 @@ class TFIdentifier:
 
 
 class TFIdentifier:
-    def __init__(self, absolute_hypo_file=None, rank_hypo_file=None, kmer=8):
-        assert absolute_hypo_file or rank_hypo_file, "At least one of the files should be provided"
-        self._mat, self._rank_mat = None, None
+    def __init__(self, absolute_hypo_file=None, rank_hypo_file=None, kmer=8, other=None):
+        if isinstance(other, TFIdentifier):
+            self._mat = other._mat.copy()
+            self._rank_mat = other._rank_mat.copy()
+            self._mer = other._mer
+        else:
+            assert absolute_hypo_file or rank_hypo_file, "At least one of the files should be provided"
+            self._mat, self._rank_mat = None, None
 
-        if absolute_hypo_file:
-            with open(absolute_hypo_file, 'rb') as file:
-                self._mat = pickle.load(file)
-        if rank_hypo_file:
-            with open(rank_hypo_file, 'rb') as file:
-                self._rank_mat = pickle.load(file)
-        # length of the column names is the kmer
-        self._mer = kmer or (len(next(iter(self._mat))) if self._mat else len(next(iter(self._rank_mat))))
+            if absolute_hypo_file:
+                with open(absolute_hypo_file, 'rb') as file:
+                    self._mat = pickle.load(file)
+            if rank_hypo_file:
+                with open(rank_hypo_file, 'rb') as file:
+                    self._rank_mat = pickle.load(file)
+            # length of the column names is the kmer
+            self._mer = kmer or (len(next(iter(self._mat))) if self._mat else len(next(iter(self._rank_mat))))
 
     def __identify(self, seq):
         TFs = []
@@ -815,9 +820,12 @@ class TFIdentifier:
 
         return {name: (seq, self.__identify(seq)) for name, seq in seqs.items()}
 
-    def __iadd__(self, other):
-        assert self._mer == other._mer, "Kmers must be the same to merge"
+    def copy(self):
+        return TFIdentifier(other=self)
 
+    def __add__(self, other):
+        assert self._mer == other._mer, "Kmers must be the same to merge"
+        self, other = self.copy(), other.copy()
         for attr in ['_mat', '_rank_mat']:
             if not hasattr(other, attr):
                 continue

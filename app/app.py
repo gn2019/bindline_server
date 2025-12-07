@@ -188,7 +188,7 @@ def get_identifier_by_type(file_type):
     identifier = public_identifiers[file_type]
     load_user_identifiers()
     if file_type in user_identifiers:
-        identifier += user_identifiers[file_type]
+        identifier = identifier + user_identifiers[file_type]
     return identifier
 
 
