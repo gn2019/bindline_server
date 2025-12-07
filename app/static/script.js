@@ -916,25 +916,6 @@ function syncPlots(plots) {
 }
 
 
-
-function syncPlofts(plot1, plot2) {  // TODO: remove
-    let isSyncing = false;
-    plot1.on('plotly_afterplot', eventData => {
-        if (isSyncing) return;
-        isSyncing = true;
-        console.log('syncing bindline->bindingSites');
-        Plotly.relayout(plot2, {'xaxis.range': plot1.layout.xaxis.range})
-            .finally(() => isSyncing = false);
-    });
-    plot2.on('plotly_afterplot', eventData => {
-        if (isSyncing) return;
-        isSyncing = true;
-        console.log('syncing bindingSites->bindline');
-        Plotly.relayout(plot1, {'xaxis.range': plot2.layout.xaxis.range})
-            .finally(() => isSyncing = false);
-    });
-}
-
 function getColorPalettes() {
     return [
         ['#1f77b4', '#aec7e8', '#0e42ff', '#3182bd', '#6baed6', '#9ecae1'],
