@@ -97,7 +97,7 @@ async function loadSequences() {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            alert(data.error);
+            showToasts('error', data.error);
             return;
         }
 
@@ -255,7 +255,7 @@ async function uploadAndPlot() {
         appendSequencesAndOptions(formData, selectedSequences, refName);
         validateConditions(formData, selectedSequences);
     } catch (error) {
-        alert(error);
+        showToast('error', error.message);
         hideGlobalLoading();
         return;
     }
@@ -380,10 +380,10 @@ function validateConditions(formData, selectedSequences) {
 
 /** Handle plot data and render plots */
 async function handlePlotData(plotData) {
+    showToasts(plotData);
     hideGlobalLoading();
 
     if (plotData.error) {
-        alert(plotData.error);
         return;
     }
     console.log(plotData); // TODO: remove

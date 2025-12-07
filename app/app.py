@@ -4,6 +4,7 @@ import os.path
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory, redirect, url_for, send_file
 from flask_cors import CORS
 from flask_login import LoginManager, login_required, current_user
+import traceback
 import zipfile
 import ssl
 import json
@@ -60,6 +61,16 @@ public_identifiers = {
 }
 
 user_identifiers = {}
+
+
+def error_wrapped(func):
+    def inner(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+    return inner
 
 
 @login_required
@@ -182,7 +193,10 @@ def get_identifier_by_type(file_type):
 
 
 @app.route('/list-files/<file_type>', methods=['GET'])
-def list_files(file_type):
+def list_files(*args, **kwargs):
+    return error_wrapped(list_files_)(*args, **kwargs)
+
+def list_files_(file_type):
     """Lists public and user-specific files for FASTA or E-Score files."""
     username = current_user.username if current_user.is_authenticated else None
     if file_type == consts.FASTA:
@@ -216,7 +230,10 @@ def get_file_path(file):
 
 
 @app.route('/sequences', methods=['POST'])
-def get_sequences():
+def get_sequences(*args, **kwargs):
+    return error_wrapped(get_sequences_)(*args, **kwargs)
+
+def get_sequences_():
     fasta_file = request.files.get('fasta')  # Get uploaded file, if any
     existing_fasta = request.form.get('existing_fasta')  # Get existing file if selected
 
@@ -443,7 +460,10 @@ def find_significant_mutations():
 
 
 @app.route('/upload', methods=['POST'])
-def upload_files():
+def upload_files(*args, **kwargs):
+    return error_wrapped(upload_files_)(*args, **kwargs)
+
+def upload_files_():
     if request.form.get('search_binding_sites') == 'true':
         return find_binding_sites()
     if request.form.get('search_significant_mutations') == 'true':
@@ -504,7 +524,10 @@ def upload_files():
 
 @app.route('/delete_file/<file_type>/<filename>', methods=['POST'])
 @login_required
-def delete_file(filename, file_type):
+def delete_file(*args, **kwargs):
+    return error_wrapped(delete_file_)(*args, **kwargs)
+
+def delete_file_(filename, file_type):
     file_metadata = files.get_file_by_name(filename, file_type, is_public=False)
     # delete from db
     files.delete_file(file_metadata.uuid)
@@ -535,7 +558,10 @@ def get_archive_name(file):
 
 
 @app.route('/download-public/<file_id>')
-def download_public_file(file_id):
+def download_public_file(*args, **kwargs):
+    return error_wrapped(download_public_file_)(*args, **kwargs)
+
+def download_public_file_(file_id):
     file = files.get_file_by_id(file_id)
     file_path = get_file_path(file)
     if os.path.exists(file_path):
@@ -551,7 +577,10 @@ def download_public_file(file_id):
 
 @app.route('/download/<file_type>/<file>')
 @login_required
-def download_file(file_type, file):
+def download_file(*args, **kwargs):
+    return error_wrapped(download_file_)(*args, **kwargs)
+
+def download_file_(file_type, file):
     file_path = get_file_path(files.get_file_by_name(file, file_type, is_public=False))
     if os.path.exists(file_path):
         # send it with the original filename <file>
@@ -575,7 +604,10 @@ def download_file(file_type, file):
 
 
 @app.post("/bulk/<file_type>/<is_public>")
-def bulk_action(file_type, is_public=False):
+def bulk_action(*args, **kwargs):
+    return error_wrapped(bulk_action_)(*args, **kwargs)
+
+def bulk_action_(file_type, is_public=False):
     request_files = request.form.getlist("files")
     action = request.form.get("action")
 

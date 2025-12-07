@@ -10,7 +10,7 @@ function handleDelete(event, form) {
     .then(response => response.json())
     .then(result => {
         if (result.error) {
-            alert(result.error);
+            showToast('error', result.error);
         } else {
             location.reload();
         }

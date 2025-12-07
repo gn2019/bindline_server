@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 bootstrap.Modal.getInstance(loginModal).hide();  // Close modal
                 location.reload();
             } else {
-                alert("Invalid credentials");
+                showToast("error", "Invalid credentials.");
             }
         });
     });
@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 bootstrap.Modal.getInstance(registerModal).hide();  // Close modal
                 location.reload();
             } else {
-                alert("Registration failed: " + data.message);
+                showToast("error", "Registration failed: " + data.message);
             }
         });
     });
