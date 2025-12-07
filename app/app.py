@@ -78,8 +78,8 @@ def error_wrapped(func):
 def dashboard():
     return render_template("dashboard.html",
                            is_authenticated=current_user.is_authenticated,
-                           fasta_files=list_user_fasta_file_names(current_user.username, include_username=False),
-                           score_files=list_user_score_file_names(current_user.username, include_username=False))
+                           fasta_files=files.list_user_fasta_files(),
+                           score_files=files.list_user_score_files())
 
 
 def update_mats(file):
@@ -522,13 +522,13 @@ def upload_files_():
     return jsonify(plot_data)
 
 
-@app.route('/delete_file/<file_type>/<filename>', methods=['POST'])
+@app.route('/delete_file/<file_id>', methods=['POST'])
 @login_required
 def delete_file(*args, **kwargs):
     return error_wrapped(delete_file_)(*args, **kwargs)
 
-def delete_file_(filename, file_type):
-    file_metadata = files.get_file_by_name(filename, file_type, is_public=False)
+def delete_file_(file_id):
+    file_metadata = files.get_file_by_id(file_id)
     # delete from db
     files.delete_file(file_metadata.uuid)
     # delete from disk
@@ -575,23 +575,13 @@ def download_public_file_(file_id):
         return jsonify({'error': 'File not found'}), 404
 
 
-@app.route('/download/<file_type>/<file>')
+@app.route('/download/<file_id>')
 @login_required
 def download_file(*args, **kwargs):
     return error_wrapped(download_file_)(*args, **kwargs)
 
-def download_file_(file_type, file):
-    file_path = get_file_path(files.get_file_by_name(file, file_type, is_public=False))
-    if os.path.exists(file_path):
-        # send it with the original filename <file>
-        file_path = os.path.abspath(file_path)
-        # avoid downloading if not in uploads
-        if not file_path.startswith(os.path.abspath(consts.UPLOAD_DIR)):
-            return jsonify({'error': 'File not found'}), 404
-        return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path),
-                                   as_attachment=True, download_name=get_download_name(file))
-    else:
-        return jsonify({'error': 'File not found'}), 404
+def download_file_(file_id):
+    return download_public_file_(file_id)
 
 
 # def get_file_path(file_type, f, is_public=False):
@@ -603,17 +593,17 @@ def download_file_(file_type, file):
 #         raise ValueError("Invalid file type")
 
 
-@app.post("/bulk/<file_type>/<is_public>")
+@app.post("/bulk")
 def bulk_action(*args, **kwargs):
     return error_wrapped(bulk_action_)(*args, **kwargs)
 
-def bulk_action_(file_type, is_public=False):
+def bulk_action_():
     request_files = request.form.getlist("files")
     action = request.form.get("action")
 
     if action == "delete":
         for f in request_files:
-            delete_file(f, file_type)
+            delete_file(f)
         return redirect(url_for("dashboard"))
 
     if action == "download":
