@@ -338,6 +338,7 @@ function appendScoreFiles(formData) {
             throw new Error('Please select at least one E-Score file.');
         }
         selectedFiles.forEach((file, index) => formData.append(`score_${index}`, file));
+        formData.delete("score");  // remove the uploaded file entry
         return;
     }
     if (scoreSource === 'score-upload') {
