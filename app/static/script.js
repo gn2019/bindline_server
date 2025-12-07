@@ -389,7 +389,7 @@ async function handlePlotData(plotData) {
     console.log(plotData); // TODO: remove
 
     const plotComponents = {
-        bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout, legendFunc: handleLegendClick },
+        bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout, callbackFunc: (component) => {handleLegendClick(component.div); highlightSequenceOnHover(component.div);}},
         bindingSites: { id: 'binding-sites-plot', checkFunc: plotData => plotData.binding_sites, traceFunc: createBindingSiteTraces, layoutFunc: getBindingSitesPlotLayout },
         allMutants: { id: 'all-mutants-plot', checkFunc: plotData => plotData.mutants_effect, traceFunc: createAllMutantsTraces, layoutFunc: getAllMutantsPlotLayout }
     };
@@ -428,9 +428,6 @@ async function handlePlotData(plotData) {
             toggleLoading(component.id, false); // Hide spinner
 
             div.sequence_str = plotData.sequence_strs[plotData.ref_name];
-            if (component.legendFunc) {
-                component.legendFunc(div);
-            }
             div.on('plotly_afterplot', () => setXTicks(div));
             setXTicks(div);
 
@@ -438,6 +435,10 @@ async function handlePlotData(plotData) {
             component.traces = traces;
             component.metadata = metadata;
             component.layout = layout;
+
+            if (component.callbackFunc) {
+                component.callbackFunc(component);
+            }
         }, 0);
     }
 
@@ -574,6 +575,8 @@ function createTraces(plotData) {
                 sequence: seqName,
                 isMetaProtein: false,
                 isMetaSequence: false,
+                k: alignedSeq.length - alignedScores.length + 1,
+                alignedSeq: alignedSeq,
             };
             traces.push(trace);
 
@@ -1094,6 +1097,37 @@ function hideGlobalLoading() {
 
 function getRadio(name) {
     return document.querySelectorAll(`input[name="${name}"]`);
+}
+
+
+function highlightSequenceOnHover(plot) {
+    plot.on('plotly_hover', function(event) {
+        const point = event.points[0];
+        const xVal = point.x;
+        const xIndex = point.data.x.indexOf(xVal);
+        // end is the trace kmer points after xVal in point.data.x
+        const xEnd = point.data.x[xIndex + getKmerLengthFromAlignedSeq(point.data.alignedSeq, point.data.k, xIndex) - 1];
+
+        Plotly.relayout(plot, {
+            shapes: [{
+                type: 'rect',
+                xref: 'x',
+                yref: 'paper',
+                x0: xVal,
+                x1: xEnd,
+                y0: 0,
+                y1: 1,
+                fillcolor: 'rgba(255, 193, 7, 0.25)',  // yellow highlight
+                line: { width: 0 }
+            }]
+        });
+    });
+
+    plot.on('plotly_unhover', function() {
+        Plotly.relayout(plot, {
+            shapes: []   // remove highlight
+        });
+    });
 }
 
 document.addEventListener("DOMContentLoaded", function () {
