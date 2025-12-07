@@ -97,7 +97,7 @@ async function loadSequences() {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            showToasts('error', data.error);
+            showToast('error', data.error);
             return;
         }
 
@@ -108,9 +108,7 @@ async function loadSequences() {
             addSequenceRow(seqName, data.sequences[seqName]);
         });
     })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+    .catch(handleError);
 }
 
 function getSequenceRows() {
@@ -255,8 +253,7 @@ async function uploadAndPlot() {
         appendSequencesAndOptions(formData, selectedSequences, refName);
         validateConditions(formData, selectedSequences);
     } catch (error) {
-        showToast('error', error.message);
-        hideGlobalLoading();
+        handleError(error)
         return;
     }
     formData.forEach((value, key) => console.log(key, value));
@@ -549,6 +546,7 @@ function toggleSequence(plotDiv, sequence) {
 /** Handle and log errors */
 function handleError(error) {
     hideGlobalLoading();
+    showToast('error', error.message);
     console.error('Error:', error);
 }
 
@@ -898,13 +896,11 @@ function syncPlots(plots) {
                 console.log(`sync ${sourcePlot.id} -> ${plot.id}`);
                 if (plot !== sourcePlot) {
                     Plotly.relayout(plot, { 'xaxis.range': xRange })
-                        .catch(error => {
-                            console.error(`Error syncing plot ${plot.id}:`, error);
-                        });
+                        .catch(handleError);
                 }
             });
         } catch (error) {
-            console.error('Error during syncing process:', error);
+            handleError(error);
         } finally {
             isSyncing = false;
         }
