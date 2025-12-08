@@ -677,7 +677,8 @@ def logo_from_ppm(ppm):
     os.remove('tmp.png')
     return logo
 
-def mer8_to_dict(mer8_content, score_type='E'):
+
+def get_score_index_in_file(mer8_content, score_type='E'):
     # mer8 file is tsv with the columns 8-mer,8-mer-rev,E-score,Median,Z-score
     # read the file into 2 dicts, one for the forward and one for the reverse
     # skip first line
@@ -685,12 +686,10 @@ def mer8_to_dict(mer8_content, score_type='E'):
     # another format is of 9 columns: 8-mer sequence, Complement of 8-mer sequence, Median Intensity Signal,
     # Enrichment Score, Zscore (MAD estimation of sd), Pvalue for Zscore, Pvalue for Enrichment Score,
     # FDR Qvalue for Zscore, FDR Qvalue for Enrichment
-    if type(mer8_content) == bytes:
-        mer8_content = mer8_content.decode('utf8')
-    mer8_content = [i.strip(' \r\n').split('\t') for i in mer8_content.strip(' \r\n').split('\n')]
     # remove header if exists
+    header = None
     if set(mer8_content[0][0]) - set('ACGT'):
-        mer8_content = mer8_content[1:]
+        header = mer8_content.pop(0)
     # determine file format by number of columns
     cols_num = len(mer8_content[0])
     score_column = {
@@ -698,24 +697,40 @@ def mer8_to_dict(mer8_content, score_type='E'):
         5: {'E': 2, 'I': 3, 'Z': 4},
         9: {'I': 2, 'E': 3, 'Z': 4},
         20: {'I': 2, 'E': 3, 'Z': 4}
-     }
+    }
     if cols_num not in score_column:
         if cols_num == 4:
-            if float(mer8_content[0][2]) <= 0.5:
-                # if any negative
-                if any(float(i[2]) < 0 for i in mer8_content):
-                    score_column[cols_num] = {'E': 2, 'Z': 3}
-                else:
-                    score_column[cols_num] = {'E': 2, 'I': 3}
+            if header:
+                header_map = {
+                    'e-score': 'E',
+                     'enrichment score': 'E',
+                     'z-score': 'Z',
+                     'i-score': 'I',
+                     'median': 'I',
+                     'median intensity': 'I'
+                }
+                score_column[cols_num] = {}
+                for i, col in enumerate(header[2:]):
+                    score_typ = header_map.get(col.lower())
+                    if score_typ is None:
+                        raise ValueError("Couldn't parse file header")
+                    score_column[cols_num][score_typ] = i + 2
+            elif float(mer8_content[0][2]) <= 0.5:
+                score_column[cols_num] = {'E': 2, 'Z': 3}
             else:
                 score_column[cols_num] = {'I': 2, 'E': 3}
         else:
             raise ValueError('mer8 file has wrong number of columns')
     if score_type not in score_column[cols_num]:
         raise ValueError(f'No {score_type} score in the table')
-    score_idx = score_column[cols_num][score_type]
-    # if cols_num == 5:
-    #     mer8_content = mer8_content[1:]
+    return score_column[cols_num][score_type]
+
+
+def mer8_to_dict(mer8_content, score_type='E'):
+    if type(mer8_content) == bytes:
+        mer8_content = mer8_content.decode('utf8')
+    mer8_content = [i.strip(' \r\n').split('\t') for i in mer8_content.strip(' \r\n').split('\n')]
+    score_idx = get_score_index_in_file(mer8_content, score_type)
     mer8_dict = {i[0]: -0.5 if i[score_idx] in ('', 'NA') else float(i[score_idx]) for i in mer8_content}
     mer8_dict.update({i[1]: -0.5 if i[score_idx] in ('', 'NA') else float(i[score_idx]) for i in mer8_content})
     return mer8_dict
