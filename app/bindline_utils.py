@@ -269,11 +269,11 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
     for name, scores in aligned_scores.items():
         if name == ref_name:
             continue
-        mut = name.split('_')[-1]
-        if mut[0] != 'm':
+        mut = name.split(' ')[-3:]
+        if mut[-1] != 'mutation':
             continue
-        mut_base = mut[-1]
-        mut_pos = int(mut[1:-1])
+        mut_base = mut[-2].split('->')[-1]
+        mut_pos = int(mut[-3])
         # for each position, take the max of mer scores
         effects[mut_pos, letters_to_index[mut_base]] = np.array(scores[max(mut_pos-mer+1, 0):mut_pos+1]).max()
     df = pd.DataFrame(columns=['A', 'C', 'G', 'T'])
