@@ -114,6 +114,16 @@ def update_mats(file):
     load_user_identifiers(force=True)
 
 
+@app.route("/download/sample-score")
+def download_sample_score():
+    return send_from_directory(os.path.join(app.root_path, 'static', 'samples'), 'score.tsv')
+
+
+@app.route("/download/sample-fasta")
+def download_sample_fasta():
+    return send_from_directory(os.path.join(app.root_path, 'static', 'samples'), 'sequences.fasta')
+
+
 def delete_from_mats(file):
     if file.file_type != files.FileType.SCORE or file.is_public or not current_user.is_authenticated:
         return
