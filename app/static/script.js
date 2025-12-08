@@ -548,7 +548,7 @@ function toggleSequence(plotDiv, sequence) {
 function handleError(error) {
     hideGlobalLoading();
     showToast('error', error.message);
-    console.error('Error:', error);
+    console.error(error);
 }
 
 
@@ -900,11 +900,15 @@ function syncPlots(plots) {
                 console.log(`sync ${sourcePlot.id} -> ${plot.id}`);
                 if (plot !== sourcePlot) {
                     Plotly.relayout(plot, { 'xaxis.range': xRange })
-                        .catch(handleError);
+                        .catch((error) => {
+                            console.error(error);
+                            showToast('warning', error.message, 5000);
+                        });
                 }
             });
         } catch (error) {
-            handleError(error);
+            console.error(error);
+            showToast('warning', error.message, 5000);
         } finally {
             isSyncing = false;
         }
