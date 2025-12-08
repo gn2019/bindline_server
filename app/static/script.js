@@ -569,6 +569,7 @@ function createTraces(plotData) {
                 name: `${seqName} (${fileName})`,
                 type: 'scatter',
                 line: {color: colorPalette[seqIndex % colorPalette.length]},
+                legendgroup: `${seqName} (${fileName})`,
                 legendrank: 4,
                 protein: fileName,
                 sequence: seqName,
@@ -593,7 +594,9 @@ function createTraces(plotData) {
                 text: alignedScores.map((_, i) => getKmerSeqFromAlignedSeq(alignedSeq, k, i)), // Tooltip showing sequence segment, TODO: 8 is hardcoded
                 // tooltip should be the text variable
                 hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
-                marker: {color: colorPalette[seqIndex % colorPalette.length], size: 10, symbol: 'circle'}
+                marker: {color: colorPalette[seqIndex % colorPalette.length], size: 10, symbol: 'circle'},
+                k: k,
+                alignedSeq: alignedSeq,
             };
             traces.push(highlightTrace);
         });
