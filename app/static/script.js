@@ -970,15 +970,16 @@ function setXTicks(plotDiv) {
     xEnd = Math.min(plotDiv.sequence_str.length, Math.floor(xEnd + 1));
 
     if (xEnd - xStart < 200) {
-        console.log(`Setting letters to x-axis for ${plotDiv.id}`)
+        console.log(`Setting letters to x-axis for ${plotDiv.id}`);
         const annotations = [];
         const sequence = plotDiv.sequence_str.substring(xStart, xEnd);
         for (let i = 0; i < xEnd - xStart; i++) {
             annotations.push({
                 x: xStart + i,
-                y: -0.15,
+                y: 0,
                 xref: 'x',
                 yref: 'paper',
+                yshift: -35,
                 text: sequence[i],
                 showarrow: false,
                 font: { family: 'Courier New, monospace', size: 16, color: 'black' }
