@@ -421,8 +421,9 @@ async function handlePlotData(plotData) {
             const [traces, metadata] = component.traceFunc(plotData);
             const layout = component.layoutFunc(metadata);
 
-            await Plotly.newPlot(div, traces, layout);
+            await Plotly.newPlot(div, traces, layout, {responsive: true});
 
+            Plotly.Plots.resize(component.id);
             toggleLoading(component.id, false); // Hide spinner
 
             div.sequence_str = plotData.sequence_strs[plotData.ref_name];
@@ -1135,7 +1136,15 @@ function highlightSequenceOnHover(plot) {
     });
 }
 
-document.addEventListener("DOMContentLoaded", function () {
+
+function resizePlotsInTab(tabSelector) {
+    const targetPane = document.querySelector(tabSelector);
+    targetPane?.querySelectorAll(".js-plotly-plot").forEach(p => {
+        Plotly.Plots.resize(p);
+    });
+}
+
+function manageModeViews() {
     const viewModeRadio = getRadio("view-option");
     const stackedContainer = document.getElementById("stacked-container");
     const plotTabs = document.getElementById("plot-tabs");
@@ -1170,15 +1179,19 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     });
-});
+}
 
 
 // Call this function on page load to initialize file lists
 loadExistingFiles();
-document.getElementById('load-sequences').addEventListener('click', () => loadSequences());
+document.getElementById('load-sequences').addEventListener('click', loadSequences);
 document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow(name=`seq_${Math.floor(Math.random() * 99999999)}`));
 // Handle uploading and plotting data from multiple E-Score files
-document.getElementById('upload-and-plot').addEventListener('click', () => uploadAndPlot());
+document.getElementById('upload-and-plot').addEventListener('click', uploadAndPlot);
+// Manage tab change
+document.addEventListener("DOMContentLoaded", manageModeViews);
+// Verify the plots take the right width when tab is changed
+document.addEventListener("shown.bs.tab", e => resizePlotsInTab(e.target.hash));
 
 // apply hideThresholds on page load and on change of radio buttons
 hideThresholds();
@@ -1192,6 +1205,8 @@ for (let threshold of ['escore', 'zscore', 'iscore', 'ranks']) {
     syncSliderAndInput(`${threshold}_threshold_slider`, `${threshold}_threshold_input`);
 }
 
+
+// TODO: remove
 async function uplfoadAndPlot() {
     showGlobalLoading(); // Show loading animation before request
 
