@@ -160,3 +160,8 @@ footer {
 }
 
 .plotly-graph-div { width: 100% !important; }
+
+div#thresholds input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}

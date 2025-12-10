@@ -46,11 +46,13 @@
                         <select id="existing_score" multiple="multiple" style="width: 100%;" class="form-select form-select-sm" size="5"></select>
                       </div>
                       <!-- Upload -->
-                      <div class="tab-pane fade d-flex align-items-center gap-2 w-100" id="score-upload">
-                        <input class="form-control form-control-sm" type="file" id="score" name="score" multiple>
-                        <a href="{{ url_for('download_sample_score') }}" class="btn btn-outline-secondary btn-sm flex-shrink-0" download>
-                          <i class="fas fa-download"></i> Download Template
-                        </a>
+                      <div class="tab-pane fade" id="score-upload">
+                          <div class="d-flex align-items-center gap-2 w-100">
+                            <input class="form-control form-control-sm" type="file" id="score" name="score" multiple>
+                            <a href="{{ url_for('download_sample_score') }}" class="btn btn-outline-secondary btn-sm flex-shrink-0" download>
+                                <i class="fas fa-download"></i> Download Template
+                            </a>
+                          </div>
                       </div>
                       <div class="tab-pane fade" id="score-search"></div>
                     </div>
@@ -76,11 +78,13 @@
                           </select>
                         </div>
                         <!-- Upload -->
-                        <div class="tab-pane fade d-flex align-items-center gap-2 w-100" id="fasta-upload">
-                          <input class="form-control form-control-sm" type="file" id="fasta" name="fasta">
-                          <a href="{{ url_for('download_sample_fasta') }}" class="btn btn-outline-secondary btn-sm flex-shrink-0" download>
-                            <i class="fas fa-download"></i> Download Template
-                          </a>
+                        <div class="tab-pane fade" id="fasta-upload">
+                            <div class="d-flex align-items-center gap-2 w-100">
+                                <input class="form-control form-control-sm" type="file" id="fasta" name="fasta">
+                                <a href="{{ url_for('download_sample_fasta') }}" class="btn btn-outline-secondary btn-sm flex-shrink-0" download>
+                                    <i class="fas fa-download"></i> Download Template
+                                </a>
+                            </div>
                         </div>
                       </div>
                       <button class="btn btn-primary btn-sm" type="button" id="load-sequences">Load Sequences</button>
@@ -93,18 +97,28 @@
                         <h6 class="fw-bold mt-3">Score Type:</h6>
                         <div class="btn-group w-10 mt-2">
                             <input type="radio" class="btn-check" name="file_type" id="escore" value="escore" checked>
-                            <label class="btn btn-outline-primary" for="escore">E-Score</label>
+                            <label class="btn btn-outline-primary" for="escore"
+                                data-bs-toggle="tooltip" data-bs-placement="top" title="Normalized enrichment of each k-mer (-0.5 to 0.5)">
+                                E-Score
+                            </label>
                             <input type="radio" class="btn-check" name="file_type" id="zscore" value="zscore">
-                            <label class="btn btn-outline-primary" for="zscore">Z-Score</label>
+                            <label class="btn btn-outline-primary" for="zscore"
+                                data-bs-toggle="tooltip" data-bs-placement="top" title="Statistical significance of binding (0 = median across k-mers)">
+                                Z-Score
+                            </label>
                             <input type="radio" class="btn-check" name="file_type" id="iscore" value="iscore">
-                            <label class="btn btn-outline-primary" for="iscore">I-Score</label>
+                            <label class="btn btn-outline-primary" for="iscore"
+                                data-bs-toggle="tooltip" data-bs-placement="top" title="Median intensity of each k-mer in the univeral microarray">
+                                I-Score
+                            </label>
                         </div>
                     </div>
                   </div>
                   <div class="col-md-9">
-                    <div class="d-flex mb-3">
+                    <div id="thresholds" class="d-flex mb-3">
                         <!-- E-Score Threshold -->
-                        <div id="escore_threshold" class="align-items-center mb-2">
+                        <div id="escore_threshold" class="align-items-center mb-2"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Click 'E-Score Threshold' button to enable/disable">
                             <input type="checkbox" id="enable_escore_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_escore_threshold" class="btn btn-light me-2">E-Score Threshold:</label>
                             <input type="range" min="0.3" max="0.5" step="0.01" value="0.45" id="escore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
@@ -112,7 +126,8 @@
                         </div>
 
                         <!-- Z-Score Threshold -->
-                        <div id="zscore_threshold" class="align-items-center mb-2">
+                        <div id="zscore_threshold" class="align-items-center mb-2"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Click 'Z-Score Threshold' button to enable/disable">
                             <input type="checkbox" id="enable_zscore_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_zscore_threshold" class="btn btn-light me-2">Z-Score Threshold:</label>
                             <input type="range" min="15" max="25" step="0.5" value="18" id="zscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
@@ -120,7 +135,8 @@
                         </div>
 
                         <!-- I-Score Threshold -->
-                        <div id="iscore_threshold" class="align-items-center mb-2">
+                        <div id="iscore_threshold" class="align-items-center mb-2"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Click 'I-Score Threshold' button to enable/disable">
                             <input type="checkbox" id="enable_iscore_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_iscore_threshold" class="btn btn-light me-2">I-Score Threshold:</label>
                             <input type="range" min="0" max="65536" step="1" value="60000" id="iscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
@@ -133,7 +149,8 @@
                         </div>
 
                         <!-- Ranks Threshold -->
-                        <div id="ranks_threshold" class="d-flex align-items-center mb-2">
+                        <div id="ranks_threshold" class="d-flex align-items-center mb-2"
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="Click 'Ranks Threshold' button to enable/disable">
                             <input type="checkbox" id="enable_ranks_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_ranks_threshold" class="btn btn-light me-2">Ranks Threshold:</label>
                             <input type="range" min="95" max="100" step="0.1" value="99" id="ranks_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
@@ -152,16 +169,11 @@
                     <label class="form-check label mt-2" for="show-diff-only">Show Diff from Reference Sequence Only</label>
                 </div>
 
-                <button class="btn btn-success btn-sm ms-2" type="button" id="upload-and-plot">
-                    {% if is_authenticated %}
-                    	Upload & Plot
-                    {% else %}
-                    	Plot
-                    {% endif %}
-                </button>
+                <button class="btn btn-success btn-sm ms-2 col-xl" type="button" id="upload-and-plot">Plot</button>
             </div>
 
             <div class="form-group mt-2">
+                <h6 class="fw-bold">Your DNA sequences:</h6>
                 <table class="table table-bordered table-striped table-sm mb-1" id="sequence-table">
                     <thead class="table-light">
                         <tr>
@@ -184,12 +196,16 @@
             Loading Data<span id="loading-dots">...</span>
         </div>
 
-        <!-- Radio buttons for selecting view -->
-        <div class="btn-group w-10">
-            <input type="radio" class="btn-check" name="view-option" id="view-stacked" value="stacked" checked>
-            <label class="btn btn-outline-primary" for="view-stacked">Stacked View</label>
-            <input type="radio" class="btn-check" name="view-option" id="view-tabbed" value="tabbed">
-            <label class="btn btn-outline-primary" for="view-tabbed">Tabbed View</label>
+        <div class="d-flex flex-wrap">
+            <h6 class="fw-bold mt-2">Results:</h6>
+
+            <!-- Radio buttons for selecting view -->
+            <div class="btn-group w-10">
+                <input type="radio" class="btn-check" name="view-option" id="view-stacked" value="stacked" checked>
+                <label class="btn btn-outline-primary" for="view-stacked">Stacked View</label>
+                <input type="radio" class="btn-check" name="view-option" id="view-tabbed" value="tabbed">
+                <label class="btn btn-outline-primary" for="view-tabbed">Tabbed View</label>
+            </div>
         </div>
 
          <!-- Shared Plot Containers (Rendered Once) -->

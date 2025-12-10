@@ -77,13 +77,13 @@ async function loadSequences() {
     if (fastaSource === 'fasta-upload') {
         const fastaFile = document.getElementById('fasta').files[0];
         if (!fastaFile) {
-            throw new Error("Please upload a FASTA file first.");
+            throw new Error("Please upload a DNA FASTA file first.");
         }
         formData.append('fasta', fastaFile);
     } else if (fastaSource === 'fasta-existing') {
         const existingFastaSelect = document.getElementById('existing_fasta');
         if (!existingFastaSelect.value) {
-            throw new Error("Please select a FASTA file first.");
+            throw new Error("Please select a DNA FASTA file first.");
         }
         formData.append('existing_fasta', existingFastaSelect.value);
     } else {
@@ -335,7 +335,7 @@ function appendScoreFiles(formData) {
     if (scoreSource === 'score-existing') {
         const selectedFiles = Array.from(document.getElementById('existing_score').selectedOptions).map(option => option.value);
         if (selectedFiles.length === 0) {
-            throw new Error('Please select at least one E-Score file.');
+            throw new Error('Please select at least one protein score file.');
         }
         selectedFiles.forEach((file, index) => formData.append(`score_${index}`, file));
         formData.delete("score");  // remove the uploaded file entry
@@ -344,7 +344,7 @@ function appendScoreFiles(formData) {
     if (scoreSource === 'score-upload') {
         const uploadedFile = document.getElementById('score').files;
         if (uploadedFile.length === 0) {
-            throw new Error('Please upload at least one Score file.');
+            throw new Error('Please upload at least one protein score file.');
         }
         return;
     }
@@ -1181,6 +1181,13 @@ function manageModeViews() {
     });
 }
 
+function initTooltips() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (el) {
+      return new bootstrap.Tooltip(el);
+    });
+}
+
 
 // Call this function on page load to initialize file lists
 loadExistingFiles();
@@ -1195,6 +1202,8 @@ document.addEventListener("shown.bs.tab", e => resizePlotsInTab(e.target.hash));
 
 // apply hideThresholds on page load and on change of radio buttons
 hideThresholds();
+// show tooltips where defined
+initTooltips();
 getRadio("file_type").forEach(radio => {
     radio.addEventListener('change', hideThresholds);
 });
