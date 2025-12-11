@@ -88,7 +88,7 @@ function send() {
 
 
 function setSearchBindingSites() {
-    setCheckboxValue('search-binding-sites');
+    pressButton('score-search-nav');
 }
 
 
