@@ -371,7 +371,7 @@ function validateConditions(formData, selectedSequences) {
     ].some(id => document.getElementById(id).checked);
 
     if ((searchSignificantMutations || searchBindingSites) && !thresholdsEnabled) {
-        throw new Error('Please enable at least one threshold.');
+        throw new Error('Please enable at least one threshold, to filter the data for binding sites only.');
     }
 }
 
