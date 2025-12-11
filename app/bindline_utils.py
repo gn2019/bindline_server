@@ -184,14 +184,14 @@ def get_public_matrix_path(filename):
 @login_required
 def get_user_matrix_path(name, ranks=False):
     if ranks:
-        filename = consts.ESCORE_RANK_MATRIX
+        dirname = consts.ESCORE_RANKS
     else:
-        filename = {
-            consts.ESCORE: consts.ESCORE_MATRIX,
-            consts.ZSCORE: consts.ZSCORE_MATRIX,
-            consts.ISCORE: consts.ISCORE_MATRIX
+        dirname = {
+            consts.ESCORE: consts.ESCORE,
+            consts.ZSCORE: consts.ZSCORE,
+            consts.ISCORE: consts.ISCORE,
         }[name]
-    path = os.path.join(consts.SCORE_DIR, auth.get_current_user_uuid(), filename)
+    path = os.path.join(consts.SCORE_DIR, auth.get_current_user_uuid(), consts.IDENTIFIERS_DIR, dirname)
     return path
 
 

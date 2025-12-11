@@ -331,6 +331,10 @@ class EScoreTable(ResultTable):
     def mer(self):
         return self._mer
 
+    def vectorize(self):
+        cols_order = (''.join(p) for p in itertools.product('ACGT', repeat=self._mer))
+        return np.array([self._dict[k] for k in cols_order], dtype=np.float32)
+
     def score(self, seq):
         scores = np.zeros(len(seq) - self._mer + 1)
         # for each position in the sequence
@@ -771,81 +775,3 @@ def get_seqs_from_fasta(fasta_file):
         return get_seqs_from_fasta_stream(fasta_file)
     with open(fasta_file, 'r') as f:
         return get_seqs_from_fasta_stream(f)
-
-class TFIdentifier:
-    def __init__(self, hypo_file, kmer=8):
-        with open(hypo_file, 'rb') as file:
-            self._dict = pickle.load(file)
-        self._mer = kmer or len(next(iter(self._dict)))
-    
-    def identify(self, seq):
-        TFs = []
-        # for each position in the sequence
-        for i in range(len(seq) - self._mer + 1):
-            # calculate the score of the motif
-            TFs.append(self._dict.setdefault(seq[i:i + self._mer], []))
-        return TFs
-
-    def __call__(self, seqs):
-        return {name: (seq, self.identify(seq)) for name, seq in seqs.items()}
-
-
-class TFIdentifier:
-    def __init__(self, absolute_hypo_file=None, rank_hypo_file=None, kmer=8, other=None):
-        if isinstance(other, TFIdentifier):
-            self._mat = other._mat.copy()
-            self._rank_mat = other._rank_mat.copy()
-            self._mer = other._mer
-        else:
-            assert absolute_hypo_file or rank_hypo_file, "At least one of the files should be provided"
-            self._mat, self._rank_mat = None, None
-
-            if absolute_hypo_file:
-                with open(absolute_hypo_file, 'rb') as file:
-                    self._mat = pickle.load(file)
-            if rank_hypo_file:
-                with open(rank_hypo_file, 'rb') as file:
-                    self._rank_mat = pickle.load(file)
-            # length of the column names is the kmer
-            self._mer = kmer or (len(next(iter(self._mat))) if self._mat else len(next(iter(self._rank_mat))))
-
-    def __identify(self, seq):
-        TFs = []
-        # for each position in the sequence
-        for i in range(len(seq) - self._mer + 1):
-            # calculate the score of the motif
-            # take the TF names which have a value in seq[i:i + self._mer] column by pandas
-            TFs.append(self._threshold_mat[seq[i:i + self._mer]].dropna().index.tolist())
-        return TFs
-
-    def __call__(self, seqs, absolute_threshold=None, rank_threshold=None):
-        assert absolute_threshold or rank_threshold, "At least one of the thresholds should be provided"
-        assert absolute_threshold is None or self._mat is not None, "Absolute matrix is not provided"
-        assert rank_threshold is None or self._rank_mat is not None, "Rank matrix is not provided"
-
-        if rank_threshold:
-            rank_threshold *= self._rank_mat.max().max() / 100
-        # turn all values below threshold to nan, keep it df
-        if absolute_threshold:
-            self._threshold_mat = self._mat.where(self._mat >= absolute_threshold, np.nan)
-            if rank_threshold:
-                self._threshold_mat += self._rank_mat.where(self._rank_mat >= rank_threshold, np.nan)
-        elif rank_threshold:
-            self._threshold_mat = self._rank_mat.where(self._rank_mat >= rank_threshold, np.nan)
-
-        return {name: (seq, self.__identify(seq)) for name, seq in seqs.items()}
-
-    def copy(self):
-        return TFIdentifier(other=self)
-
-    def __add__(self, other):
-        assert self._mer == other._mer, "Kmers must be the same to merge"
-        self, other = self.copy(), other.copy()
-        for attr in ['_mat', '_rank_mat']:
-            if not hasattr(other, attr):
-                continue
-            if hasattr(self, attr):
-                setattr(self, attr, pd.concat([getattr(self, attr), getattr(other, attr)]))
-            else:
-                setattr(self, attr, getattr(other, attr).copy())
-        return self

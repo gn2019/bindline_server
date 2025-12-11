@@ -18,6 +18,7 @@ from .database_setup import db, User
 from .auth import auth_bp  # Import the authentication blueprint
 from .files import files_bp  # Import the files blueprint
 from .bindline_utils import *
+from .tfidentifier import TFIdentifier
 
 
 app = Flask(__name__)
@@ -52,12 +53,9 @@ os.makedirs(app.config['FASTA_FOLDER'], exist_ok=True)
 os.makedirs(app.config['SCORE_FOLDER'], exist_ok=True)
 
 public_identifiers = {
-    consts.ESCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ESCORE_MATRIX),
-                                    rank_hypo_file=get_public_matrix_path(consts.ESCORE_RANK_MATRIX)),
-    consts.ZSCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ZSCORE_MATRIX),
-                                    rank_hypo_file=get_public_matrix_path(consts.ESCORE_RANK_MATRIX)),
-    consts.ISCORE : bindline.TFIdentifier(absolute_hypo_file=get_public_matrix_path(consts.ISCORE_MATRIX),
-                                    rank_hypo_file=get_public_matrix_path(consts.ESCORE_RANK_MATRIX))
+    consts.ESCORE: TFIdentifier(consts.PUBLIC_ESCORE_DIR, consts.PUBLIC_RANKS_DIR),
+    consts.ZSCORE: TFIdentifier(consts.PUBLIC_ZSCORE_DIR, consts.PUBLIC_RANKS_DIR),
+    consts.ISCORE: TFIdentifier(consts.PUBLIC_ISCORE_DIR, consts.PUBLIC_RANKS_DIR),
 }
 
 user_identifiers = {}
@@ -89,27 +87,18 @@ def update_mats(file):
     load_user_identifiers()
     file_path = get_file_path(file)
 
-    cols_order = [''.join(i) for i in itertools.product('ACGT', repeat=8)]
-    escore_file = bindline.UniProbeEScoreFile(open(file_path).read())
-    zscore_file = bindline.UniProbeZScoreFile(open(file_path).read())
-    iscore_file = bindline.UniProbeIScoreFile(open(file_path).read())
-    for name, tbl in {consts.ESCORE: escore_file, consts.ZSCORE: zscore_file, consts.ISCORE: iscore_file}.items():
+    file_content = open(file_path).read()
+    for name, tbl in {
+        consts.ESCORE: bindline.UniProbeEScoreFile(file_content),
+        consts.ZSCORE: bindline.UniProbeZScoreFile(file_content),
+        consts.ISCORE: bindline.UniProbeIScoreFile(file_content)
+    }.items():
         try:
             _, _, table = next(tbl.parse_tables())
-            df = pd.DataFrame([[table._dict[mer] for mer in cols_order]], index=[file.id], columns=cols_order)
             if name in user_identifiers:
-                df = pd.concat([df, user_identifiers[name]._mat]).groupby(level=0).last()
-            df.to_pickle(get_user_matrix_path(name))
+                user_identifiers[name].update(file.id, table, should_update_ranks=(name == consts.ESCORE), should_save=True)
         except Exception as e:
             print(f"Error parsing {name} table for file {file.filename}: {e}")
-    try:
-        _, _, escore_table = next(escore_file.parse_tables())
-        ranks_df = pd.DataFrame(np.argsort(np.argsort([[escore_table._dict[mer] for mer in cols_order]])), index=[file.id], columns=cols_order)
-        if consts.ESCORE in user_identifiers:
-            ranks_df = pd.concat([user_identifiers[consts.ESCORE]._rank_mat, ranks_df]).groupby(level=0).last()
-        ranks_df.to_pickle(get_user_matrix_path(consts.ESCORE, ranks=True))
-    except Exception as e:
-        print(f"Error updating ranks matrix for file {file.filename}: {e}")
 
     load_user_identifiers(force=True)
 
@@ -131,13 +120,7 @@ def delete_from_mats(file):
     load_user_identifiers()
     for name in consts.SCORES:
         if name in user_identifiers:
-            identifier = user_identifiers[name]
-            if identifier._mat is not None and file.id in identifier._mat.index:
-                identifier._mat.drop(index=file.id, inplace=True)
-                identifier._mat.to_pickle(get_user_matrix_path(name))
-            if identifier._rank_mat is not None and file.id in identifier._rank_mat.index:
-                identifier._rank_mat.drop(index=file.id, inplace=True)
-                identifier._rank_mat.to_pickle(get_user_matrix_path(consts.ESCORE, ranks=True))
+            user_identifiers[name].remove(file.id, should_update_ranks=(name == consts.ESCORE), should_save=True)
 
 
 
@@ -189,7 +172,7 @@ def load_user_identifiers(force=False):
         path = get_user_matrix_path_if_exists(name)
         ranks_path = get_user_matrix_path_if_exists(name, ranks=True)
         if path:
-            user_identifiers[name] = bindline.TFIdentifier(absolute_hypo_file=path, rank_hypo_file=ranks_path)
+            user_identifiers[name] = TFIdentifier(path, ranks_path)
 
 
 def get_identifier_by_type(file_type):
@@ -198,7 +181,7 @@ def get_identifier_by_type(file_type):
     identifier = public_identifiers[file_type]
     load_user_identifiers()
     if file_type in user_identifiers:
-        identifier = identifier + user_identifiers[file_type]
+        identifier += user_identifiers[file_type]
     return identifier
 
 
@@ -291,12 +274,8 @@ def find_binding_sites():
     ref_name = request.form.get('ref_name')
     # identify by both identifiers, and combine
     identifier = get_identifier_by_type(file_type)
-    identified_TFs = identifier(sequences, absolute_threshold=selected_threshold, rank_threshold=ranks_threshold)
-
-    # Extract unique file paths of identified TFs
-    # identified_TFs[seq_name] is a tuple where first value is the sequence
-    # and the second is the list of lists of file paths
-    identified_unq_file_ids = sum(sum(map(lambda s: s[1], identified_TFs.values()), []), [])
+    identified_TFs = identifier(sequences, absolute_threshold=selected_threshold, rank_threshold=ranks_threshold, summarize=True)
+    identified_unq_file_ids = set(map(int, sum(sum(map(lambda x: x[1], identified_TFs.values()), []), [])))
 
     # Get the tables for each identified file
     identified_tables = {}
@@ -372,7 +351,7 @@ def find_binding_sites():
         'gaps': gaps,
     }
 
-    print(plot_data)
+    print(plot_data)  # TODO: remove
 
     return Response(
         json.dumps(plot_data, allow_nan=False),
