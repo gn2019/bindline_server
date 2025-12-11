@@ -3,7 +3,7 @@ import os.path
 
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory, redirect, url_for, send_file
 from flask_cors import CORS
-from flask_login import LoginManager, login_required, current_user
+from flask_login import LoginManager, login_required, current_user, user_logged_out
 import traceback
 import zipfile
 import ssl
@@ -58,7 +58,8 @@ public_identifiers = {
     consts.ISCORE: TFIdentifier(consts.PUBLIC_ISCORE_DIR, consts.PUBLIC_RANKS_DIR),
 }
 
-user_identifiers = {}
+# Per-user, in-memory TFIdentifier cache
+identifiers_cache = {}  # { user_id: { score_type: TFIdentifier } }
 
 
 def error_wrapped(func):
@@ -69,6 +70,12 @@ def error_wrapped(func):
             traceback.print_exc()
             return jsonify({'error': str(e)}), 500
     return inner
+
+
+@user_logged_out.connect_via(app)
+def clear_identifiers_on_logout(sender, user):
+    user_id = user.id
+    identifiers_cache.pop(user_id, None)
 
 
 @login_required
@@ -84,21 +91,27 @@ def update_mats(file):
     if file.file_type != files.FileType.SCORE or file.is_public or not current_user.is_authenticated:
         return
 
-    load_user_identifiers()
+    user_dict = load_user_identifiers()
     file_path = get_file_path(file)
-
     file_content = open(file_path).read()
-    for name, tbl in {
+    for score_type, tbl in {
         consts.ESCORE: bindline.UniProbeEScoreFile(file_content),
         consts.ZSCORE: bindline.UniProbeZScoreFile(file_content),
         consts.ISCORE: bindline.UniProbeIScoreFile(file_content)
     }.items():
         try:
             _, _, table = next(tbl.parse_tables())
-            if name in user_identifiers:
-                user_identifiers[name].update(file.id, table, should_update_ranks=(name == consts.ESCORE), should_save=True)
+            if score_type in user_dict:
+                user_dict[score_type].update(file.id, table, should_update_ranks=(score_type == consts.ESCORE), should_save=True)
+            else:
+                user_mat_path = get_user_matrix_path(score_type)
+                user_ranks_path = get_user_matrix_path(score_type, ranks=True)
+                new_identifier = TFIdentifier(user_mat_path, user_ranks_path)
+                new_identifier.update(file.id, table, should_update_ranks=(score_type == consts.ESCORE), should_save=True)
+                user_dict[score_type] = new_identifier
         except Exception as e:
-            print(f"Error parsing {name} table for file {file.filename}: {e}")
+            traceback.print_exc()
+            print(f"Error parsing {score_type} table for file {file.filename}: {e}")
 
     load_user_identifiers(force=True)
 
@@ -117,10 +130,10 @@ def delete_from_mats(file):
     if file.file_type != files.FileType.SCORE or file.is_public or not current_user.is_authenticated:
         return
 
-    load_user_identifiers()
-    for name in consts.SCORES:
-        if name in user_identifiers:
-            user_identifiers[name].remove(file.id, should_update_ranks=(name == consts.ESCORE), should_save=True)
+    user_dict = load_user_identifiers()
+    for score_type in consts.SCORES:
+        if score_type in user_dict:
+            user_identifiers[score_type].remove(file.id, should_update_ranks=(score_type == consts.ESCORE), should_save=True)
 
 
 
@@ -162,26 +175,33 @@ def get_score_files(request):
 
 def load_user_identifiers(force=False):
     if not current_user.is_authenticated:
-        user_identifiers.clear()
-        return
-    if 'dummy' in user_identifiers and not force:
-        return
-    user_identifiers['dummy'] = True  # just to mark that we loaded them
+        return {}
 
+    user_id = current_user.id
+    # If we already loaded for this user and no force reload → return cached
+    if user_id in identifiers_cache and not force:
+        return identifiers_cache[user_id]
+
+    # Build fresh dict for this user
+    user_dict = {}
     for name in consts.SCORES:
         path = get_user_matrix_path_if_exists(name)
         ranks_path = get_user_matrix_path_if_exists(name, ranks=True)
         if path:
-            user_identifiers[name] = TFIdentifier(path, ranks_path)
+            user_dict[name] = TFIdentifier(path, ranks_path)
+
+    identifiers_cache[user_id] = user_dict
+    return user_dict
 
 
 def get_identifier_by_type(file_type):
     if file_type not in public_identifiers:
         raise ValueError("Invalid file type selected.")
     identifier = public_identifiers[file_type]
-    load_user_identifiers()
-    if file_type in user_identifiers:
-        identifier += user_identifiers[file_type]
+    if current_user.is_authenticated:
+        user_dict = load_user_identifiers()
+        if file_type in user_dict:
+            identifier += user_dict[file_type]
     return identifier
 
 
