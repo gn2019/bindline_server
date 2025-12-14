@@ -133,8 +133,7 @@ def delete_from_mats(file):
     user_dict = load_user_identifiers()
     for score_type in consts.SCORES:
         if score_type in user_dict:
-            user_identifiers[score_type].remove(file.id, should_update_ranks=(score_type == consts.ESCORE), should_save=True)
-
+            user_dict[score_type].remove(file.id, should_update_ranks=(score_type == consts.ESCORE), should_save=True)
 
 
 def upload_and_update_db(file, file_type):
