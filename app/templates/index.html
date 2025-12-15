@@ -24,6 +24,9 @@
         <!-- Collapsible Form Container -->
         <div id="upload-form-container" class="collapse show">
             <form id="upload-form">
+                <h6 class="text-center fw-bold mb-3">
+                    Explore protein–DNA interactions using PBM data. To start, choose protein and DNA, and plot!
+                </h6>
                 <div class="row">
                   <div class="col-md-6">
                     <div class="d-flex align-items-center flex-wrap">
@@ -211,22 +214,57 @@
             </div>
         </div>
 
-         <!-- Shared Plot Containers (Rendered Once) -->
+        <!-- Shared Plot Containers (Rendered Once) -->
         <div id="plots-container">
+
             <div id="bindline-container" class="plot-container">
+                <a tabindex="0"
+                   class="info-button d-none"
+                   role="button"
+                   data-bs-html="true"
+                   title="BindLine Plot"
+                   data-bs-content="The BindLine plot visualizes the binding affinity of protein-DNA interactions based on the provided PBM data.
+                   For more information, visit the
+                   <a href='{{ url_for('help_page') }}#plots' target='_blank'>Help Page</a>.">
+                    <i class="fas fa-info-circle"></i>
+                </a>
+
                 <div id="bindline-plot"></div>
                 <div id="bindline-plot-loading" class="loading-spinner"></div>
             </div>
 
             <div id="binding-sites-container" class="plot-container">
+                <a tabindex="0"
+                   class="info-button d-none"
+                   role="button"
+                   data-bs-html="true"
+                   title="Binding Sites Plot"
+                   data-bs-content="The Binding Sites plot displays the locations of significant binding sites on the DNA sequences based on the selected thresholds.
+                   For more information, visit the
+                   <a href='{{ url_for('help_page') }}#plots' target='_blank'>Help Page</a>.">
+                    <i class="fas fa-info-circle"></i>
+                </a>
+
                 <div id="binding-sites-plot"></div>
                 <div id="binding-sites-plot-loading" class="loading-spinner"></div>
             </div>
 
             <div id="all-mutants-container" class="plot-container">
+                <a tabindex="0"
+                   class="info-button d-none"
+                   role="button"
+                   data-bs-html="true"
+                   title="All Mutants Plot"
+                   data-bs-content="The All Mutants plot illustrates the effects of all possible point mutations on the binding affinity compared to the reference sequence.
+                   For more information, visit the
+                   <a href='{{ url_for('help_page') }}#plots' target='_blank'>Help Page</a>.">
+                    <i class="fas fa-info-circle"></i>
+                </a>
+
                 <div id="all-mutants-plot"></div>
                 <div id="all-mutants-plot-loading" class="loading-spinner"></div>
             </div>
+
         </div>
 
         <!-- Stacked View -->

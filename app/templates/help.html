@@ -1,243 +1,292 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>BindLine – Help</title>
-
     <script src="{{ url_for('static', filename='help.js') }}"></script>
 </head>
 
 <body class="container py-4">
 
-    {% include 'header.html' %}
+{% include 'header.html' %}
 
-    <!-- Image Modal -->
-    <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content bg-dark">
-          <div class="modal-body p-0 text-center">
-            <img id="modalImage" src="" style="width: 100%; height: auto;">
-          </div>
-        </div>
+<!-- Image Modal -->
+
+<div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content bg-dark">
+      <div class="modal-body p-0 text-center">
+        <img id="modalImage" src="" style="width: 100%; height: auto;">
       </div>
     </div>
+  </div>
+</div>
 
-    <h2 class="text-primary mb-4">
-        <i class="fas fa-circle-question"></i> Help
-    </h2>
+<h2 class="text-primary mb-4">
+    <i class="fas fa-circle-question"></i> Help
+</h2>
 
-    <!-- INTRODUCTION -->
-    <div class="help-section">
-        <h4><i class="help-icon fas fa-dna"></i> Introduction</h4>
+<!-- TABLE OF CONTENTS -->
 
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <p>
-                    BindLine is a tool for exploring protein–DNA interactions based on Protein Binding Microarrays (PBM) results. 
-                    PBM experiments provide quantitative binding scores for all possible DNA k-mers (sequences in lengths "k"), allowing visualization
-                    of binding strength along full DNA sequences rather than relying only on motifs. 
-                    BindLine helps identify binding sites directly from the data, even when no single consensus motif exists.
-                    TODO TODO TODO Something about interactivity TODO TODO TODO
-                </p>
-            </div>
+<div class="help-section">
+    <h5>Contents</h5>
+    <ul>
+        <li><a href="#quick-start">Quick start</a></li>
+        <li><a href="#introduction">Introduction</a></li>
+        <li><a href="#basic-usage">Basic usage</a></li>
+        <li><a href="#advanced-usage">Advanced usage</a></li>
+        <li><a href="#plots">Plots</a></li>
+        <li><a href="#data">Data and personal dashboard</a></li>
+    </ul>
+</div>
 
-            <!-- Image placeholder -->
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_intro.png') }}" alt="Introduction">
-            </div>
+<!-- QUICK START -->
+
+<div class="help-section" id="quick-start">
+    <h4>
+        <a class="text-decoration-none" data-bs-toggle="collapse" href="#quickStartBody" role="button" aria-expanded="true">
+            <i class="help-icon fas fa-bolt"></i> Quick start
+            <i class="fas fa-chevron-down ms-2"></i>
+        </a>
+    </h4>
+    <div class="collapse show" id="quickStartBody">
+        <p>
+            BindLine lets you visualize and compare protein–DNA binding directly along DNA sequences using PBM data.
+        </p>
+        <ol>
+            <li>Select a protein dataset (public PBM data or your own uploaded results).</li>
+            <li>Load DNA sequences (FASTA files or manual input). Sequences must be aligned; the first sequence is used as the reference.</li>
+            <li>Choose a score type (E-score is recommended for most analyses).</li>
+            <li>Inspect the BindLine plot to identify regions of strong or differential binding.</li>
+            <li>Optionally apply thresholds to highlight binding sites and enable additional plots.</li>
+            <li>Use advanced options to search across proteins, scan mutations, or focus on differences from the reference.</li>
+        </ol>
+    </div>
+</div>
+
+<!-- INTRODUCTION -->
+
+<div id="introduction">
+<div class="help-section">
+    <h4><i class="help-icon fas fa-dna"></i> Introduction</h4>
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <p class="text-justify">
+                BindLine is an interactive web tool for exploring protein–DNA interactions using Protein Binding Microarray (PBM) data.
+                PBM experiments measure binding affinities for all possible DNA k-mers (sequences in lengths "k"), allowing binding preferences to be examined along full DNA sequences rather than summarized as a single consensus motif.
+                <br>
+                BindLine visualizes these quantitative scores directly on DNA sequences,
+                enabling identification of binding sites even when binding is weak, degenerate, or distributed across multiple sequence contexts.
+                <br>
+                BindLine is an interactive tool, allowing users a smooth exploration of their data through zooming, panning, and toggling visibility of sequences and proteins.
+            </p>
+        </div>
+        <div class="col-md-4 img-col">
+            <img src="{{ url_for('static', filename='img/help_intro.png') }}" alt="Introduction">
         </div>
     </div>
+</div>
 
-    <!-- SCORING -->
-    <div class="help-section">
-        <div class="row">
-            <div class="col">
-                <h4><i class="help-icon fas fa-chart-line"></i> Scoring</h4>
-            </div>
-            <div class="col-auto position-relative">
-                <a href="{{ url_for('index') }}?sample_id=1" class="btn btn-warning btn-sm">
-                    <i class="fas fa-flask me-1"></i>
-                    Load Sample</a>
-            </div>
+<!-- BASIC USAGE -->
+
+<div id="basic-usage">
+<div class="help-section">
+    <h4><i class="help-icon fas fa-play-circle"></i> Basic usage</h4>
+
+<h5>Protein and DNA input</h5>
+<div class="row align-items-center">
+    <div class="col-md-8">
+        <p class="text-justify">
+            BindLine operates on protein PBM results and DNA sequences.
+            <br>
+            You may choose from public PBM datasets or upload your own.
+            Some of the public results, and possibly yours, has only part of the score types.
+            Types that are excluded from the uploaded results are unsupported.
+            You can choose the desired type before analysis. You may use existing public results or use your own.
+            As a logged-on user you may upload files for a continuous use.
+            <br>
+            DNA sequences can be loaded from FASTA files or entered directly in the sequence table.
+            All sequences in a single analysis must be aligned.
+            The first sequence is treated as the reference sequence,
+            while the others are interpreted as substitutions, insertions, or deletions relative to it.
+            The “Load Sequences” button allows reviewing or preparing sequences before plotting.
+        </p>
+    </div>
+    <div class="col-md-4 img-col">
+        <img src="{{ url_for('static', filename='img/help_scoring.png') }}" alt="Input">
+    </div>
+</div>
+
+<h5 class="mt-4">Scoring</h5>
+<div class="row">
+    <div class="col-md-8">
+        <p class="text-justify">
+            BindLine supports three types of PBM scores to evaluate protein–DNA binding:
+        </p>
+        <ul>
+            <li><strong>I-score</strong> – Raw median fluorescence intensity.</li>
+            <li><strong>Z-score</strong> – Statistical significance relative to the k-mer distribution (0 is the median).</li>
+            <li><strong>E-score</strong> – Rank-based normalized enrichment score (−0.5 to 0.5).</li>
+        </ul>
+        <p class="text-justify">
+            The "BindLine" plot displays the selected score along the aligned sequences.
+            Each point corresponds to the score of the k-mer starting at that nucleotide position.
+        </p>
+    </div>
+</div>
+
+<h5 class="mt-4">Threshold settings</h5>
+<div class="row">
+    <div class="col-md-8">
+        <p class="text-justify">
+            BindLine offers applying thresholds for each score type, enabling identification of significant binding events.
+            You may enable and adjust them with sliders or numeric input fields.
+            Ranks threshold, which highlights only the top-scoring k-mers, is also available.
+            When thresholds are enabled, the "Binding Sites" plot appears and visualizes overlapping, competing, or nearby binding events.
+        </p>
+    </div>
+    <div class="col-md-4 img-col">
+        <img src="{{ url_for('static', filename='img/help_thresholds.png') }}" alt="Thresholds">
+    </div>
+</div>
+
+</div>
+
+<!-- ADVANCED USAGE -->
+
+<div id="advanced-usage">
+<div class="help-section">
+    <h4><i class="help-icon fas fa-tools"></i> Advanced usage</h4>
+
+<div class="row">
+    <div class="col">
+        <h5>Search for binding sites across all proteins</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}?sample_id=2" class="btn btn-warning btn-sm">
+            <i class="fas fa-flask me-1"></i> Load Sample
+        </a>
+    </div>
+</div>
+<div class="row align-items-center">
+    <div class="col-md-8">
+        <p class="text-justify">
+            Scan all available protein datasets and display only those with at least one k-mer exceeding the selected
+            threshold in the input sequences.
+            This mode is useful when the relevant transcription factor is unknown.
+            We recommend not to use a low threshold, as the results will be noisy.
+        </p>
+    </div>
+    <div class="col-md-4 img-col">
+        <img src="{{ url_for('static', filename='img/help_across_proteins.png') }}" alt="Across proteins">
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col">
+        <h5>Search for significant point mutations</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}?sample_id=3" class="btn btn-warning btn-sm">
+            <i class="fas fa-flask me-1"></i> Load Sample
+        </a>
+    </div>
+</div>
+<div class="row align-items-center">
+    <div class="col-md-8">
+        <p class="text-justify">
+            Analyze the effects of single-nucleotide substitutions, insertions, and deletions derived from a reference sequence.
+            Only mutations that create binding sites based on the selected threshold are shown.
+            Mutations producing identical binding behavior are collapsed and shown only once.
+            When using this option, the "All Mutants" plot appears.
+            It summarizes the effect of each substitution mutation on binding scores.
+        </p>
+    </div>
+    <div class="col-md-4 img-col">
+        <img src="{{ url_for('static', filename='img/help_mutations.png') }}" alt="Mutations">
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col">
+        <h5>Show differences from the reference sequence only</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}?sample_id=3" class="btn btn-warning btn-sm">
+            <i class="fas fa-flask me-1"></i> Load Sample
+        </a>
+    </div>
+</div>
+<div class="row align-items-center">
+    <div class="col-md-8">
+        <p class="text-justify">
+            Restrict visualization to mutations that create or abolish binding sites.
+            De-Novo binding sites are shown in color, while destroyed sites are shown in gray.
+        </p>
+    </div>
+    <div class="col-md-4 img-col">
+        <img src="{{ url_for('static', filename='img/help_diff.png') }}" alt="Diff">
+    </div>
+</div>
+
+</div>
+
+<!-- PLOTS -->
+
+<div id="plots">
+<div class="help-section">
+    <h4><i class="help-icon fas fa-chart-line"></i> Plots</h4>
+
+<h5>BindLine</h5>
+<p>
+    Continuous visualization of PBM scores along aligned DNA sequences.
+    Hovering the mouse over points highlights the corresponding k-mer.
+    Clicking a legend entry toggles visibility of that sequence.
+    Double-clicking a legend entry isolates that sequence.
+    If more than one sequence / protein are shown, additional legend entries appear to control groups of lines of the same sequence / protein.
+    Maximal score for each protein is indicated by a dashed line.
+    Zooming by click-and-drag or by control buttons change the x-axis range in all plots simultaneously.
+</p>
+
+<h5>Binding Sites</h5>
+<p>
+    Discrete visualization of binding events enabled by score thresholds.
+    Each binding site is represented as a rectangle spanning the sequence from the first to last nucleotide of the k-mers above the selected threshold.
+    There may be overlapping binding sites for the same protein.
+</p>
+
+<h5>All Mutants</h5>
+<p>
+    Summary of the effect of individual point mutations on binding scores.
+    Each bar represents a single-nucleotide substitution relative to the reference sequence.
+    The value indicates the difference between the highest score in the k-mer range between the mutant and the reference.
+    It is important to pay attention to the absolute score values, and not to the mutation effect only.
+    For that, it is recommended to look only at sites of interest in this plot.
+</p>
+
+</div>
+
+<!-- DATA -->
+
+<div id="data">
+<div class="help-section">
+    <h4><i class="help-icon fas fa-database"></i> Data and personal dashboard</h4>
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <p class="text-justify">
+                Public PBM score files and FASTA sequences can be downloaded from the <a href="/data">Data</a> page.
+                Logged-in users can manage uploaded files through their personal dashboard, including downloading
+                or deleting files at any time.
+            </p>
         </div>
-
-        <div class="row">
-            <div class="col-md-8">
-                <p>
-                    BindLine works with three PBM score types:
-                    <ul>
-                        <li><strong>I-Score</strong> – median intensity of the k-mer in the univeral microarray - the "raw" measurement</li>
-                        <li><strong>Z-Score</strong> – statistical significance of binding, in which 0 is the median intensity across k-mers</li>
-                        <li><strong>E-Score</strong> – normalized enrichment of each k-mer, in the range -0.5 to 0.5. This measurement relies on ranking of the k-mer scores, and is more robust</li>
-                    </ul>
-                    Some of the public results, and possibly yours, has only part of the score types.
-                    Types that are excluded from the uploaded results are unsupported.
-                    You can choose the desired type before analysis.
-                    You may use existing public results or use your own.
-                    As a logged-on user you may upload files for a continuous use.<br>
-                    You may explore the binding across one or more sequences. You may use public fasta files, containing known promoters and enhancers, or upload your own.
-                    The “Load Sequences” button allows reviewing or preparing sequences before plotting.
-                    You may avoid using files and use the sequences table directly.
-                    All sequences in a single analysis file should align.
-                    One of them (the first by default) is considered as reference ("ref") and the others are considered as its mutations.
-                    This way, you can view the effect of insertions, deletions and base substitutions.<br>
-                    The "BindLine" plot shows the chosen scores across the aligned sequences.
-                    The "ref" sequence is the one shown in the x-axis, and the others are aligned to it.
-                    Each point in the "BindLine" plot represents the score for the k-mer starting in this nucleotide.<br>
-                    Stacked and Tabbed visualization modes are options for presentations of the plots.
-                </p>
-            </div>
-
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_scoring.png') }}" alt="Scoring">
-            </div>
+        <div class="col-md-4 img-col">
+            <img src="{{ url_for('static', filename='img/help_data.png') }}" alt="Data">
         </div>
     </div>
+</div>
 
-    <!-- THRESHOLD SETTINGS -->
-    <div class="help-section">
-        <div class="row">
-            <div class="col">
-                <h4><i class="help-icon fas fa-sliders-h"></i> Threshold Settings</h4>
-            </div>
-            <div class="col-auto position-relative">
-                <a href="{{ url_for('index') }}?sample_id=2" class="btn btn-warning btn-sm">
-                    <i class="fas fa-flask me-1"></i>
-                    Load Sample</a>
-            </div>
-        </div>
+{% include 'footer.html' %}
 
-        <div class="row">
-            <div class="col-md-8">
-                <p>
-                    BindLine offers optional thresholds for each score type. 
-                    You may enable and adjust them with sliders or numeric input fields. 
-                    Ranks thresholds, which highlight only the top-scoring k-mers, are also available.
-                    When using a threshold, the "Binding Sites" plot appears.
-                    Each sequence that is above the threshold is called here a binding site.
-                    The "Binding Sites" plot shows which proteins compete on the same binding sites and which may interact as their binding sites are nearby.
-                    Deletions are shown in this plot as black rectangles, and insertions as black triangles.
-                </p>
-            </div>
-
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_thresholds.png') }}" alt="Thresholds">
-            </div>
-        </div>
-    </div>
-
-    <!-- SEARCH ACROSS PROTEINS -->
-    <div class="help-section">
-        <div class="row">
-            <div class="col">
-                <h4><i class="help-icon fas fa-search"></i> Search for binding sites across all proteins</h4>
-            </div>
-            <div class="col-auto position-relative">
-                <a href="{{ url_for('index') }}?sample_id=2" class="btn btn-warning btn-sm">
-                    <i class="fas fa-flask me-1"></i>
-                    Load Sample</a>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-8">
-                <p>
-                    BindLine allows searching for binding sites across all the results - public and yours - instead of using certain results.
-                    For this, you must choose a threshold to view only proteins that their score overcomes it for at least one k-mer in the sequences.
-                    We recommend not to use a low threshold, as the results will be noisy.
-                </p>
-            </div>
-
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_across_proteins.png') }}" alt="Across Proteins">
-            </div>
-        </div>
-    </div>
-
-    <!-- SEARCH FOR MUTATIONS -->
-    <div class="help-section">
-        <div class="row">
-            <div class="col">
-                <h4><i class="help-icon fas fa-random"></i> Search for significant point mutations</h4>
-            </div>
-            <div class="col-auto position-relative">
-                <a href="{{ url_for('index') }}?sample_id=3" class="btn btn-warning btn-sm">
-                    <i class="fas fa-flask me-1"></i>
-                    Load Sample</a>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-8">
-                <p>
-                    BindLine allows searching for binding sites across all sequences derived from one sequence by single point mutations - 1-base substitutions, insertions and deletions.
-                    For this, you must choose a threshold to view only sequences that their score overcomes it for at least one k-mer in the sequences.
-                    Mutations which cause the same behavior are shown only once (for example: if AAAA is a binding site and the uploaded sequence is AAAC, substitution C->A and insertion of A before the C are considered the same and only one of them is shown).
-                    When using this option, the "All Mutants" plot appears.
-                    "All Mutants" plot shows the effect of each substitution on the score, both positively and negatively.
-                    This type of plot is ussually used to show Massively Parallel Reporter Assay (MPRA) reaults, and can be compared to them to find the transcription factor causing the differences in gene expression.
-                </p>
-            </div>
-
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_mutations.png') }}" alt="Mutants">
-            </div>
-        </div>
-    </div>
-
-    <!-- SHOW DIFF -->
-    <div class="help-section">
-        <div class="row">
-            <div class="col">
-                <h4><i class="help-icon fas fa-eye"></i> Show diff from reference sequence only</h4>
-            </div>
-            <div class="col-auto position-relative">
-                <a href="{{ url_for('index') }}?sample_id=3" class="btn btn-warning btn-sm">
-                    <i class="fas fa-flask me-1"></i>
-                    Load Sample</a>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-8">
-                <p>
-                    BindLine allows searching only the major differences between sequences - only the ones which create or destroy a binding site, as defined by the threshold selected. 
-                    When using this option, only sequences that are different from the "ref" sequences are shown, as well as the "ref" sequence itself.
-                    De-Novo binding sites are shown in color, and destroyed binding sites are shown in gray. 
-                </p>
-            </div>
-
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_diff.png') }}" alt="Diff from Reference">
-            </div>
-        </div>
-    </div>
-
-    <div class="help-section">
-        <h4><i class="help-icon fas fa-database"></i>Data and personal dashboard</h4>
-
-        <div class="row">
-            <div class="col-md-8">
-                <p>
-                    BindLine allows downloading the public score and FASTA files through the <a href="/data">Data</a> page.
-                    Bindline stores private files you upload so you can reuse them in future analyses.
-                    Uploaded files are available for download or deletion at any time through your
-                    {% if (current_user.is_authenticated) %}
-                        <a href="/dashboard">personal dashboard</a>
-                    {% else %}
-                        personal dashboard
-                    {% endif %}
-                .
-                </p>
-            </div>
-
-            <div class="col-md-4 img-col">
-                <img src="{{ url_for('static', filename='img/help_data.png') }}" alt="Data">
-            </div>
-        </div>
-
-    </div>
-
-    {% include 'footer.html' %}
 </body>
 </html>

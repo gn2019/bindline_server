@@ -415,6 +415,7 @@ async function handlePlotData(plotData) {
         const div = document.getElementById(component.id);
         div.innerHTML = '';
         toggleLoading(component.id, true); // Show spinner
+        toggleInfoPopover(component.id.replace('-plot', '-container'), false); // hide popover
 
         // Use setTimeout to break out of the current execution cycle and allow UI to refresh
         setTimeout(async () => {
@@ -425,6 +426,7 @@ async function handlePlotData(plotData) {
 
             Plotly.Plots.resize(component.id);
             toggleLoading(component.id, false); // Hide spinner
+            toggleInfoPopover(component.id.replace('-plot', '-container'), true); // show popover
 
             div.sequence_str = plotData.sequence_strs[plotData.ref_name];
             div.on('plotly_afterplot', () => setXTicks(div));
@@ -1181,8 +1183,28 @@ function manageModeViews() {
     });
 }
 
+function toggleInfoPopover(containerId, show) {
+    const container = document.getElementById(containerId);
+    const infoBtn = container.querySelector('.info-button');
+    if (!infoBtn) return;
+    // Show icon
+    if (show) {
+        infoBtn.classList.remove('d-none');
+        // Initialize popover once
+        if (!infoBtn._popoverInstance) {
+            infoBtn._popoverInstance = new bootstrap.Popover(infoBtn, {trigger: 'focus', html: true});
+        }
+    } else {
+        infoBtn.classList.add('d-none');
+        // Hide popover if visible
+        if (infoBtn._popoverInstance) {
+            infoBtn._popoverInstance.hide();
+        }
+    }
+}
+
 function initTooltips() {
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (el) {
       return new bootstrap.Tooltip(el);
     });

@@ -165,3 +165,7 @@ div#thresholds input:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+.text-justify {
+    text-align: justify;
+}
