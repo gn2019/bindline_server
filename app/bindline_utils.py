@@ -239,7 +239,7 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
         df.loc[i] = effects[i] - ref_effect[i]
     mutants_effect = df.to_dict(orient='index')
     mutants_effect = [{k: v for k, v in mutants_effect[pos].items() if k != ref_seq[pos]} for pos in range(len(mutants_effect))]
-    return mutants_effect
+    return mutants_effect, ref_effect.tolist()
 
 
 def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, sequences, ref_name,

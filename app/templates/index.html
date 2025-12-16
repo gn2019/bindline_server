@@ -59,7 +59,7 @@
                     <div id="score-tabs" class="tab-content">
                       <!-- Existing -->
                       <div class="tab-pane fade show active" id="score-existing">
-                        <select id="existing_score" multiple="multiple" style="width: 100%;" class="form-select form-select-sm" size="5"></select>
+                        <select id="existing_score" multiple="multiple" class="form-select form-select-sm w-100" size="5"></select>
                       </div>
                       <!-- Upload -->
                       <div class="tab-pane fade" id="score-upload">
@@ -138,7 +138,7 @@
                             <input type="checkbox" id="enable_escore_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_escore_threshold" class="btn btn-light me-2">E-Score Threshold:</label>
                             <input type="range" min="0.3" max="0.5" step="0.01" value="0.45" id="escore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                            <input type="number" min="-0.5" max="0.5" step="0.01" value="0.45" id="escore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                            <input type="number" min="-0.5" max="0.5" step="0.01" value="0.45" id="escore_threshold_input" class="form-control form-control-sm w-50 w-md-25" disabled>
                         </div>
 
                         <!-- Z-Score Threshold -->
@@ -147,7 +147,7 @@
                             <input type="checkbox" id="enable_zscore_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_zscore_threshold" class="btn btn-light me-2">Z-Score Threshold:</label>
                             <input type="range" min="15" max="25" step="0.5" value="18" id="zscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                            <input type="number" min="0" max="50" step="0.5" value="18" id="zscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                            <input type="number" min="0" max="50" step="0.5" value="18" id="zscore_threshold_input" class="form-control form-control-sm w-50 w-md-25" disabled>
                         </div>
 
                         <!-- I-Score Threshold -->
@@ -156,12 +156,12 @@
                             <input type="checkbox" id="enable_iscore_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_iscore_threshold" class="btn btn-light me-2">I-Score Threshold:</label>
                             <input type="range" min="0" max="65536" step="1" value="60000" id="iscore_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                            <input type="number" min="0" max="65536" step="1" value="60000" id="iscore_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                            <input type="number" min="0" max="65536" step="1" value="60000" id="iscore_threshold_input" class="form-control form-control-sm w-50 w-md-25" disabled>
                         </div>
 
                         <!-- & sign -->
                         <div class="align-items-center ms-3 me-3 mt-1">
-                            <span class="fw-bold" style="font-size: x-large;"> &amp; </span>
+                            <span class="fw-bold fs-3"> &amp; </span>
                         </div>
 
                         <!-- Ranks Threshold -->
@@ -170,7 +170,7 @@
                             <input type="checkbox" id="enable_ranks_threshold" class="form-check-input me-2" hidden>
                             <label for="enable_ranks_threshold" class="btn btn-light me-2">Ranks Threshold:</label>
                             <input type="range" min="95" max="100" step="0.1" value="99" id="ranks_threshold_slider" class="form-range flex-grow-1 me-2" disabled>
-                            <input type="number" min="0" max="100" step="0.1" value="99" id="ranks_threshold_input" class="form-control form-control-sm" style="width: 70px;" disabled>
+                            <input type="number" min="0" max="100" step="0.1" value="99" id="ranks_threshold_input" class="form-control form-control-sm w-50 w-md-25" disabled>
                         </div>
                     </div>
                   </div>
@@ -209,7 +209,7 @@
         </form>
         </div>
 
-        <div id="global-loading" style="display: none; text-align: center; font-size: 16px; font-weight: bold;">
+        <div id="global-loading" class="d-none text-center fs-4 fw-bold position-fixed top-50 start-50">
             Loading Data<span id="loading-dots">...</span>
         </div>
 
@@ -228,9 +228,9 @@
         <!-- Shared Plot Containers (Rendered Once) -->
         <div id="plots-container">
 
-            <div id="bindline-container" class="plot-container">
+            <div id="bindline-container" class="plot-container position-relative w-100">
                 <a tabindex="0"
-                   class="info-button d-none"
+                   class="info-button d-none mt-2 ms-2 z-1 fs-5 position-absolute"
                    role="button"
                    data-bs-html="true"
                    title="BindLine Plot"
@@ -244,9 +244,9 @@
                 <div id="bindline-plot-loading" class="loading-spinner"></div>
             </div>
 
-            <div id="binding-sites-container" class="plot-container">
+            <div id="binding-sites-container" class="plot-container position-relative w-100">
                 <a tabindex="0"
-                   class="info-button d-none"
+                   class="info-button d-none mt-2 ms-2 z-1 fs-5 position-absolute"
                    role="button"
                    data-bs-html="true"
                    title="Binding Sites Plot"
@@ -260,9 +260,9 @@
                 <div id="binding-sites-plot-loading" class="loading-spinner"></div>
             </div>
 
-            <div id="all-mutants-container" class="plot-container">
+            <div id="all-mutants-container" class="plot-container position-relative w-100">
                 <a tabindex="0"
-                   class="info-button d-none"
+                   class="info-button d-none mt-2 ms-2 z-1 fs-5 position-absolute"
                    role="button"
                    data-bs-html="true"
                    title="All Mutants Plot"
@@ -271,6 +271,10 @@
                    <a href='{{ url_for('help_page') }}#plots' target='_blank'>Help Page</a>.">
                     <i class="fas fa-info-circle"></i>
                 </a>
+                <div class="form-check form-switch d-none mt-2 ms-5 z-1 fs-6 position-absolute show-with-plot">
+                  <input class="form-check-input" type="checkbox" id="toggle-wt-center">
+                  <label class="form-check-label" for="toggle-wt-center">Center on WT</label>
+                </div>
 
                 <div id="all-mutants-plot"></div>
                 <div id="all-mutants-plot-loading" class="loading-spinner"></div>
@@ -284,15 +288,15 @@
         </div>
 
         <!-- Tabs View -->
-        <div id="plot-tabs" style="display: none;">
+        <div id="plot-tabs" class="d-none">
             <ul class="nav nav-tabs" id="plot-tabs-nav">
-                <li class="nav-item" id="bindline-tab-nav" style="display: none">
+                <li class="nav-item d-none" id="bindline-tab-nav">
                     <a class="nav-link active" data-bs-toggle="tab" href="#bindline-tab">BindLine</a>
                 </li>
-                <li class="nav-item" id="binding-sites-tab-nav" style="display: none">
+                <li class="nav-item d-none" id="binding-sites-tab-nav">
                     <a class="nav-link" data-bs-toggle="tab" href="#binding-sites-tab">Binding Sites</a>
                 </li>
-                <li class="nav-item" id="all-mutants-tab-nav" style="display: none">
+                <li class="nav-item d-none" id="all-mutants-tab-nav">
                     <a class="nav-link" data-bs-toggle="tab" href="#all-mutants-tab">All Mutants</a>
                 </li>
             </ul>

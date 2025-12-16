@@ -428,7 +428,7 @@ def find_significant_mutations():
                 del binding_sites[score_file][name][i]
 
         # create MPRA-like data
-        mutants_effect = get_all_mutants_effect(aligned_scores[score_file], sequences, ref_name, mer=table.mer)
+        mutants_effect, ref_effect = get_all_mutants_effect(aligned_scores[score_file], sequences, ref_name, mer=table.mer)
 
         curr_binding_sites = binding_sites[score_file]
         for name in sequences.keys():
@@ -459,6 +459,7 @@ def find_significant_mutations():
         'insertions': insertions,
         'gaps': gaps,
         'mutants_effect': mutants_effect,
+        'ref_effect': ref_effect,
         'threshold': selected_threshold,
     }
 

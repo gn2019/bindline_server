@@ -422,9 +422,9 @@ async function handlePlotData(plotData) {
         if (component.checkFunc && !component.checkFunc(plotData)) {
             document.getElementById(component.id).innerHTML = '';  // remove plot
             delete plotComponents[key];
-            tabNavigation.style.display = 'none';
+            tabNavigation.classList.add('d-none');
         } else {
-            tabNavigation.style.display = 'block';
+            tabNavigation.classList.remove('d-none');
         }
     }
 
@@ -441,6 +441,7 @@ async function handlePlotData(plotData) {
         div.innerHTML = '';
         toggleLoading(component.id, true); // Show spinner
         toggleInfoPopover(component.id.replace('-plot', '-container'), false); // hide popover
+        togglePlotRelatedElements(component.id.replace('-plot', '-container'), false);
 
         // Use setTimeout to break out of the current execution cycle and allow UI to refresh
         setTimeout(async () => {
@@ -452,6 +453,7 @@ async function handlePlotData(plotData) {
             Plotly.Plots.resize(component.id);
             toggleLoading(component.id, false); // Hide spinner
             toggleInfoPopover(component.id.replace('-plot', '-container'), true); // show popover
+            togglePlotRelatedElements(component.id.replace('-plot', '-container'), true);
 
             div.sequence_str = plotData.sequence_strs[plotData.ref_name];
             div.on('plotly_afterplot', () => setXTicks(div));
@@ -863,6 +865,8 @@ function createAllMutantsTraces(plotData) {
                 marker: {color: nucleotideColors[nuc], symbol: nucleotideShapes[refNuc], size: 10, alpha: 0.8},
                 name: `${nuc} at ${position}`,
                 showlegend: false,
+                delta: effect,
+                wt: plotData.ref_effect[position],
             });
 
             // Add vertical line to zero
@@ -874,9 +878,24 @@ function createAllMutantsTraces(plotData) {
                 showlegend: false,
                 hoverinfo: "skip",  // Prevents tooltips from appearing
                 hovertemplate: null,  // no tooltip
+                delta: effect,
+                wt: plotData.ref_effect[position],
             });
         });
     });
+
+    // add the WT curve, hidden by default
+    const wtTrace = {
+        // plotData.ref_effect length
+        x: Array.from({length: plotData.ref_effect.length}, (_, i) => i),
+        y: plotData.ref_effect,
+        mode: 'lines',
+        line: { dash: 'dot', color: 'gray' },
+        name: plotData.ref_name,
+        visible: 'legendonly',
+        showlegend: false,
+        isWT: true,
+    };
 
     // add legend of the ref symbols and the colors
     const shapeTraces = Object.keys(nucleotideShapes).map(nucleotide => ({
@@ -894,7 +913,7 @@ function createAllMutantsTraces(plotData) {
     }));
 
     // Combine all traces
-    const finalTraces = [...lines, ...traces, ...shapeTraces, ...colorTraces];
+    const finalTraces = [...lines, ...traces, ...shapeTraces, ...colorTraces, wtTrace];
     return [finalTraces, null];
 }
 
@@ -1130,7 +1149,7 @@ function showGlobalLoading() {
 
     if (!loadingDiv || !loadingDots) return;
 
-    loadingDiv.style.display = "block"; // Show loading message
+    loadingDiv.classList.remove("d-none"); // Show loading message
     window.scrollTo({top: 0, behavior: "smooth"}); // Scroll to top smoothly
 
     let dotCount = 0;
@@ -1145,7 +1164,7 @@ function showGlobalLoading() {
 function hideGlobalLoading() {
     clearInterval(loadingInterval); // Stop animation
     const loadingDiv = document.getElementById("global-loading");
-    if (loadingDiv) loadingDiv.style.display = "none"; // Hide message
+    if (loadingDiv) loadingDiv.classList.add("d-none"); // Hide message
 }
 
 
@@ -1215,15 +1234,15 @@ function manageModeViews() {
                     const tabContent = document.getElementById(tabId);
                     tabContent.appendChild(plotDiv);
                 });
-                plotStacked.style.display = "none";
-                plotTabs.style.display = "block";
+                plotStacked.classList.add("d-none");
+                plotTabs.classList.remove("d-none");
             } else if (this.id === 'view-stacked') {
                 // Move plots back to stacked view
                 plotDivs.forEach(plotDiv => {
                     stackedContainer.appendChild(plotDiv);
                 });
-                plotTabs.style.display = "none";
-                plotStacked.style.display = "block";
+                plotTabs.classList.add("d-none");
+                plotStacked.classList.remove("d-none");
             }
         });
     });
@@ -1249,6 +1268,18 @@ function toggleInfoPopover(containerId, show) {
     }
 }
 
+function togglePlotRelatedElements(containerId, show) {
+    const container = document.getElementById(containerId);
+    const elements = container.querySelector('.show-with-plot');
+    if (!elements) return;
+
+    if (show) {
+        elements.classList.remove('d-none');
+    } else {
+        elements.classList.add('d-none');
+    }
+}
+
 function initTooltips() {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (el) {
@@ -1270,6 +1301,52 @@ function showCookiesNotice() {
 });
 }
 
+
+function animateAllMutants(centerOnWT) {
+    const plot = document.getElementById('all-mutants-plot');
+
+    const newY = plot.data.map(trace => {
+        if (trace.delta === undefined) return trace.y;
+
+        const ref = centerOnWT ? trace.wt : 0;
+        if (trace.mode === "lines") {
+            return [ref, ref + trace.delta];
+        } else {  // markers
+            return [ref + trace.delta];
+        }
+    });
+
+    // Build the frame object correctly
+    const frame = {
+        data: plot.data.map((trace, i) => ({
+            y: newY[i]
+        }))
+    };
+
+    Plotly.animate(
+        plot,
+        frame,
+        {
+            transition: { duration: 500, easing: "cubic-in-out" },
+            frame: { duration: 500, redraw: false }
+        }
+    );
+
+    // show to WT curve if centerOnWT
+    const wtIndex = plot.data.findIndex(trace => trace.isWT);
+    Plotly.restyle(plot, {visible: centerOnWT ? true : 'legendonly'}, [wtIndex]);
+    // change y axis label
+    Plotly.relayout(plot, {
+        'yaxis.title.text': centerOnWT ? 'Score' : 'Effect (ΔScore)'
+    });
+}
+
+let isCenteredOnWT = false;
+document.getElementById('toggle-wt-center')
+    .addEventListener('change', () => {
+        isCenteredOnWT = !isCenteredOnWT;
+        animateAllMutants(isCenteredOnWT);
+    });
 
 // Call this function on page load to initialize file lists
 loadExistingFiles();
