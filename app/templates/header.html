@@ -8,44 +8,57 @@
 
 <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
 
-<nav class="d-flex justify-content-between align-items-center mb-4">
-    <div class="d-flex align-items-center gap-5 ms-4">
+<nav class="container-fluid mb-4">
+  <div class="row align-items-center">
+
+    <!-- LEFT -->
+    <div class="col-md-5">
+      <div class="d-flex align-items-center gap-5">
         <a href="{{ url_for('index') }}" class="text-decoration-none fw-semibold text-secondary nav-link-hover nav-big">
-            <i class="fas fa-home me-1"></i> Home
+          <i class="fas fa-home me-1"></i> Home
         </a>
         <a href="{{ url_for('help_page') }}" class="text-decoration-none fw-semibold text-secondary nav-link-hover nav-big">
-            <i class="fas fa-circle-question me-1"></i> Help
+          <i class="fas fa-circle-question me-1"></i> Help
         </a>
         <a href="{{ url_for('data_page') }}" class="text-decoration-none fw-semibold text-secondary nav-link-hover nav-big">
-            <i class="fas fa-database me-1"></i> Data
+          <i class="fas fa-database me-1"></i> Data
         </a>
+      </div>
     </div>
 
-    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="BindLine"
-     class="no-zoom" style="cursor: pointer; font-size: 2rem; width: 15%; height: auto;"
-     onclick="window.location.href='{{ url_for('index') }}'">
+    <!-- CENTER (only centered when space allows) -->
+    <div class="col-md-2 text-center">
+      <img src="{{ url_for('static', filename='img/logo.png') }}"
+           alt="BindLine"
+           class="img-fluid no-zoom"
+           style="max-width: 180px; cursor: pointer;"
+           onclick="window.location.href='{{ url_for('index') }}'">
+    </div>
 
-    <div class="d-flex align-items-center">
-        <span class="me-3" style="font-size: 1.2rem; font-weight: bold;">
-            {{ current_user.username }}
+    <!-- RIGHT -->
+    <div class="col-md-5 ms-auto">
+      <div class="d-flex align-items-center justify-content-end">
+        <span class="me-3 fw-bold fs-5">
+          {{ current_user.username }}
         </span>
-        <div class="dropdown">
-            <button class="btn btn-outline-primary dropdown-toggle d-flex align-items-center"
-                    type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false"
-                    style="font-size: 1.5rem;">
-                <i class="fas fa-user-circle"></i>
-            </button>
 
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
-                {% if is_authenticated %}
-                    <li><a class="dropdown-item" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('auth.logout', next=request.path or url_for('index')) }}">Log Out</a></li>
-                {% else %}
-                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#loginModal">Log In</a></li>
-                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#registerModal">Sign Up</a></li>
-                {% endif %}
+        <div class="dropdown">
+          <button class="btn btn-outline-primary dropdown-toggle d-flex align-items-center fs-4"
+                  type="button" data-bs-toggle="dropdown">
+            <i class="fas fa-user-circle"></i>
+          </button>
+
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+            {% if is_authenticated %}
+              <li><a class="dropdown-item" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('auth.logout', next=request.path or url_for('index')) }}">Log Out</a></li>
+            {% else %}
+              <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#loginModal">Log In</a></li>
+              <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#registerModal">Sign Up</a></li>
+            {% endif %}
             </ul>
         </div>
+      </div>
     </div>
 
     <!-- Login Modal -->
@@ -98,4 +111,5 @@
             </div>
         </div>
     </div>
+  </div>
 </nav>
