@@ -109,19 +109,20 @@ def get_user_files():
 
 
 def list_user_score_files():
-    return File.query.filter_by(user_id=current_user.id, file_type=FileType.SCORE).all()
+    return File.query.filter_by(user_id=current_user.id, file_type=FileType.SCORE).order_by(File.filename).all()
 
 
 def list_user_fasta_files():
-    return File.query.filter_by(user_id=current_user.id, file_type=FileType.FASTA).all()
+    # return sorted by filename
+    return File.query.filter_by(user_id=current_user.id, file_type=FileType.FASTA).order_by(File.filename).all()
 
 
 def list_public_score_files():
-    return File.query.filter_by(is_public=True, file_type=FileType.SCORE).all()
+    return File.query.filter_by(is_public=True, file_type=FileType.SCORE).order_by(File.filename).all()
 
 
 def list_public_fasta_files():
-    return File.query.filter_by(is_public=True, file_type=FileType.FASTA).all()
+    return File.query.filter_by(is_public=True, file_type=FileType.FASTA).order_by(File.dataset, File.filename).all()
 
 
 def list_user_public_score_files():
