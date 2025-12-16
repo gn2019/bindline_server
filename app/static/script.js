@@ -18,8 +18,8 @@ function loadExistingFiles() {
                 dropdownPosition: "below",
 
                 // Dropdown item
-                templateResult: function(fileOption) {
-                     if (!fileOption.id || fileOption.loading) {
+                templateResult: function (fileOption) {
+                    if (!fileOption.id || fileOption.loading) {
                         return fileOption.text;
                     }
                     return showScoreFile(files.find(f => f.id == fileOption.id));
@@ -30,7 +30,7 @@ function loadExistingFiles() {
             });
         });
 
-	fetch('/list-files/fasta')
+    fetch('/list-files/fasta')
         .then(response => response.json())
         .then(files => {
             const fastaDropdown = document.getElementById('existing_fasta');
@@ -94,21 +94,21 @@ async function loadSequences() {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showToast('error', data.error);
-            return;
-        }
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showToast('error', data.error);
+                return;
+            }
 
-        const sequenceTbody = document.getElementById('sequence-tbody');
-        sequenceTbody.innerHTML = ''; // Clear previous rows
+            const sequenceTbody = document.getElementById('sequence-tbody');
+            sequenceTbody.innerHTML = ''; // Clear previous rows
 
-        Object.keys(data.sequences).forEach(seqName => {
-            addSequenceRow(seqName, data.sequences[seqName]);
-        });
-    })
-    .catch(handleError);
+            Object.keys(data.sequences).forEach(seqName => {
+                addSequenceRow(seqName, data.sequences[seqName]);
+            });
+        })
+        .catch(handleError);
 }
 
 function getSequenceRows() {
@@ -140,7 +140,9 @@ function getRefRow() {
 
 function setFirstAsRef() {
     const row = getFirstCheckedRow();
-    if (row) { setAsRef(row) }
+    if (row) {
+        setAsRef(row)
+    }
 }
 
 function isRefRow(row) {
@@ -259,7 +261,7 @@ async function uploadAndPlot() {
     formData.forEach((value, key) => console.log(key, value));
 
 
-    await fetch('/upload', { method: 'POST', body: formData })
+    await fetch('/upload', {method: 'POST', body: formData})
         .then(response => response.json())
         .then(plotData => handlePlotData(plotData))
         .catch(handleError);
@@ -387,9 +389,27 @@ async function handlePlotData(plotData) {
     console.log(plotData); // TODO: remove
 
     const plotComponents = {
-        bindline: { id: 'bindline-plot', traceFunc: createTraces, layoutFunc: getBindlinePlotLayout, callbackFunc: (component) => {handleLegendClick(component.div); highlightSequenceOnHover(component.div);}},
-        bindingSites: { id: 'binding-sites-plot', checkFunc: plotData => plotData.binding_sites, traceFunc: createBindingSiteTraces, layoutFunc: getBindingSitesPlotLayout },
-        allMutants: { id: 'all-mutants-plot', checkFunc: plotData => plotData.mutants_effect, traceFunc: createAllMutantsTraces, layoutFunc: getAllMutantsPlotLayout }
+        bindline: {
+            id: 'bindline-plot',
+            traceFunc: createTraces,
+            layoutFunc: getBindlinePlotLayout,
+            callbackFunc: (component) => {
+                handleLegendClick(component.div);
+                highlightSequenceOnHover(component.div);
+            }
+        },
+        bindingSites: {
+            id: 'binding-sites-plot',
+            checkFunc: plotData => plotData.binding_sites,
+            traceFunc: createBindingSiteTraces,
+            layoutFunc: getBindingSitesPlotLayout
+        },
+        allMutants: {
+            id: 'all-mutants-plot',
+            checkFunc: plotData => plotData.mutants_effect,
+            traceFunc: createAllMutantsTraces,
+            layoutFunc: getAllMutantsPlotLayout
+        }
     };
     // leave only the plots that are checked
     for (const [key, component] of Object.entries(plotComponents)) {
@@ -473,7 +493,7 @@ function handleLegendClick(plotDiv) {
 }
 
 
-function enforceLegendRules(plotDiv, trace=null) {
+function enforceLegendRules(plotDiv, trace = null) {
     const data = plotDiv.data;
 
     // Track which proteins still have visible sequences
@@ -521,12 +541,12 @@ function toggleProtein(plotDiv, protein) {
     });
     const shouldDim = areThereVisibleIndices(plotDiv, indices);
     // find the meta-protein trace and dim it if should
-    for (const [i, trace] of plotDiv.data.entries())  {
+    for (const [i, trace] of plotDiv.data.entries()) {
         if (trace.protein === protein && trace.isMetaProtein) {
             indices.push(i);
         }
     }
-    Plotly.restyle(plotDiv, { visible: shouldDim ? "legendonly" : true }, indices);
+    Plotly.restyle(plotDiv, {visible: shouldDim ? "legendonly" : true}, indices);
 }
 
 
@@ -538,12 +558,12 @@ function toggleSequence(plotDiv, sequence) {
         }
     });
     const shouldDim = areThereVisibleIndices(plotDiv, indices);
-    for (const [i, trace] of plotDiv.data.entries())  {
+    for (const [i, trace] of plotDiv.data.entries()) {
         if (trace.sequence === sequence && trace.isMetaSequence) {
             indices.push(i);
         }
     }
-    Plotly.restyle(plotDiv, { visible: shouldDim ? "legendonly" : true }, indices);
+    Plotly.restyle(plotDiv, {visible: shouldDim ? "legendonly" : true}, indices);
 }
 
 
@@ -611,7 +631,7 @@ function createTraces(plotData) {
             mode: 'lines',
             name: 'Maximal Score',
             showlegend: false,
-            line: { dash: 'dash', color: colorPalette[0] },
+            line: {dash: 'dash', color: colorPalette[0]},
             protein: fileName,
             isMaxScore: true,
             sequence: null,
@@ -625,7 +645,7 @@ function createTraces(plotData) {
                 y: [null],
                 mode: "lines",
                 name: `Protein: ${fileName}`,
-                line: { color: colorPalette[0] },
+                line: {color: colorPalette[0]},
                 protein: fileName,
                 isMetaProtein: true,
                 showlegend: true,
@@ -643,7 +663,7 @@ function createTraces(plotData) {
             showlegend: true,
             hoverinfo: "skip",
             legendrank: 1,     // place it between ranks
-            line: { color: "rgba(0,0,0,0)" }
+            line: {color: "rgba(0,0,0,0)"}
         });
     }
     // collect sequences that have lines
@@ -662,7 +682,7 @@ function createTraces(plotData) {
                 name: `Sequence: ${seqName}`,
                 sequence: seqName,
                 isMetaSequence: true,
-                line: { color: 'black' },
+                line: {color: 'black'},
                 showlegend: true,
                 legendrank: 2,
             });
@@ -674,7 +694,7 @@ function createTraces(plotData) {
         y: [null],
         mode: "lines",
         name: `Maximal Score`,
-        line: { dash: 'dash', color: 'black' },
+        line: {dash: 'dash', color: 'black'},
         isMaxScore: true,
         isMetaSequence: true,
         sequence: null,
@@ -689,7 +709,7 @@ function createTraces(plotData) {
         showlegend: true,
         hoverinfo: "skip",
         legendrank: 3,     // place it between ranks
-        line: { color: "rgba(0,0,0,0)" }
+        line: {color: "rgba(0,0,0,0)"}
     });
     return [traces, null];
 }
@@ -727,7 +747,7 @@ function createBindingSiteTraces(plotData) {
                     showlegend: false // Show the legend only for the first trace of a file/sequence
                 });
                 bindingSiteTraces.push({
-                    x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
+                    x: Array.from({length: end - start + 1}, (_, i) => start + i),
                     y: Array(end - start + 1).fill(yLabel),
                     mode: "markers",
                     marker: {
@@ -792,17 +812,17 @@ function hexToRGB(hex) {
 
 function getBindlinePlotLayout() {
     return {
-        xaxis: { title: {text: 'Position' }},
-        yaxis: { title: {text: 'Score' }},
+        xaxis: {title: {text: 'Position'}},
+        yaxis: {title: {text: 'Score'}},
         hovermode: 'closest',
         showlegend: true,
     };
 }
 
 function createAllMutantsTraces(plotData) {
-    const nucleotideColors = { "A": "green", "C": "blue", "G": "orange", "T": "red" };
+    const nucleotideColors = {"A": "green", "C": "blue", "G": "orange", "T": "red"};
     // Shape mapping for reference nucleotides
-    const nucleotideShapes = { "A": "square", "C": "circle", "G": "triangle-up", "T": "diamond" };
+    const nucleotideShapes = {"A": "square", "C": "circle", "G": "triangle-up", "T": "diamond"};
     // Prepare traces
     let traces = [];
     let lines = [];
@@ -816,7 +836,7 @@ function createAllMutantsTraces(plotData) {
                 x: [parseInt(position)],
                 y: [effect],
                 mode: "markers",
-                marker: { color: nucleotideColors[nuc], symbol: nucleotideShapes[refNuc], size: 10, alpha: 0.8 },
+                marker: {color: nucleotideColors[nuc], symbol: nucleotideShapes[refNuc], size: 10, alpha: 0.8},
                 name: `${nuc} at ${position}`,
                 showlegend: false,
             });
@@ -826,7 +846,7 @@ function createAllMutantsTraces(plotData) {
                 x: [parseInt(position), parseInt(position)],
                 y: [0, effect],
                 mode: "lines",
-                line: { color: "black", width: 1, alpha: 0.5 },
+                line: {color: "black", width: 1, alpha: 0.5},
                 showlegend: false,
                 hoverinfo: "skip",  // Prevents tooltips from appearing
                 hovertemplate: null,  // no tooltip
@@ -837,13 +857,15 @@ function createAllMutantsTraces(plotData) {
     // add legend of the ref symbols and the colors
     const shapeTraces = Object.keys(nucleotideShapes).map(nucleotide => ({
         x: [null], y: [null], mode: "markers",
-        marker: { symbol: nucleotideShapes[nucleotide], color: "rgba(0,0,0,0)", opacity: 1, size: 12,
-                  line: { color: "black", width: 2 }},
+        marker: {
+            symbol: nucleotideShapes[nucleotide], color: "rgba(0,0,0,0)", opacity: 1, size: 12,
+            line: {color: "black", width: 2}
+        },
         name: `Ref nucleotide: ${nucleotide}`
     }));
     const colorTraces = Object.keys(nucleotideColors).map(nucleotide => ({
         x: [null], y: [null], mode: "markers",
-        marker: { symbol: "circle", color: nucleotideColors[nucleotide], size: 12 },
+        marker: {symbol: "circle", color: nucleotideColors[nucleotide], size: 12},
         name: `Mutant nucleotide: ${nucleotide}`
     }));
 
@@ -854,14 +876,14 @@ function createAllMutantsTraces(plotData) {
 
 function getAllMutantsPlotLayout() {
     const layout = {
-        xaxis: { title: {text: "Position" }, tickmode: "linear" },
-        yaxis: { title: {text: "Effect (ΔScore)" }},
+        xaxis: {title: {text: "Position"}, tickmode: "linear"},
+        yaxis: {title: {text: "Effect (ΔScore)"}},
         template: "plotly_white"
     };
     return layout;
     return {
-        xaxis: { title: {text: 'Position' }},
-        yaxis: { title: {text: 'Score' }},
+        xaxis: {title: {text: 'Position'}},
+        yaxis: {title: {text: 'Score'}},
         hovermode: 'closest',
         showlegend: true,
     };
@@ -871,7 +893,7 @@ function getBindingSitesPlotLayout(yLabels) {
     const baseHeight = 200; // Minimum height for axes and margins when there are no labels
     const labelHeight = 30; // Height allocated per label
     return {
-        xaxis: { title: {text: 'Position' }},
+        xaxis: {title: {text: 'Position'}},
         yaxis: {
             type: 'category', // Use categorical y-axis
             categoryarray: yLabels, // Explicitly specify the y-axis order
@@ -902,7 +924,7 @@ function syncPlots(plots) {
             plots.forEach(plot => {
                 console.log(`sync ${sourcePlot.id} -> ${plot.id}`);
                 if (plot !== sourcePlot) {
-                    Plotly.relayout(plot, { 'xaxis.range': xRange })
+                    Plotly.relayout(plot, {'xaxis.range': xRange})
                         .catch((error) => {
                             console.error(error);
                             showToast('warning', error.message, 5000);
@@ -985,10 +1007,10 @@ function setXTicks(plotDiv) {
                 yshift: -35,
                 text: sequence[i],
                 showarrow: false,
-                font: { family: 'Courier New, monospace', size: 16, color: 'black' }
+                font: {family: 'Courier New, monospace', size: 16, color: 'black'}
             });
         }
-        Plotly.relayout(plotDiv, { annotations: annotations })
+        Plotly.relayout(plotDiv, {annotations: annotations})
             .finally(() => {
                 isSettingTicks[plotDiv.id] = false; // Reset the flag after relayout is complete
             });
@@ -1085,7 +1107,7 @@ function showGlobalLoading() {
     if (!loadingDiv || !loadingDots) return;
 
     loadingDiv.style.display = "block"; // Show loading message
-    window.scrollTo({ top: 0, behavior: "smooth" }); // Scroll to top smoothly
+    window.scrollTo({top: 0, behavior: "smooth"}); // Scroll to top smoothly
 
     let dotCount = 0;
 
@@ -1109,7 +1131,7 @@ function getRadio(name) {
 
 
 function highlightSequenceOnHover(plot) {
-    plot.on('plotly_hover', function(event) {
+    plot.on('plotly_hover', function (event) {
         const point = event.points[0];
         const xVal = point.x;
         const xIndex = point.data.x.indexOf(xVal);
@@ -1126,12 +1148,12 @@ function highlightSequenceOnHover(plot) {
                 y0: 0,
                 y1: 1,
                 fillcolor: 'rgba(255, 193, 7, 0.25)',  // yellow highlight
-                line: { width: 0 }
+                line: {width: 0}
             }]
         });
     });
 
-    plot.on('plotly_unhover', function() {
+    plot.on('plotly_unhover', function () {
         Plotly.relayout(plot, {
             shapes: []   // remove highlight
         });
@@ -1206,19 +1228,35 @@ function toggleInfoPopover(containerId, show) {
 function initTooltips() {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (el) {
-      return new bootstrap.Tooltip(el);
+        return new bootstrap.Tooltip(el);
     });
+}
+
+function showCookiesNotice() {
+    const notice = document.getElementById("cookieNotice");
+    const okBtn = document.getElementById("cookieOk");
+
+    if (!localStorage.getItem("cookieNoticeSeen")) {
+    notice.style.display = "block";
+}
+
+    okBtn.addEventListener("click", () => {
+    localStorage.setItem("cookieNoticeSeen", "yes");
+    notice.remove();
+});
 }
 
 
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', loadSequences);
-document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow(name=`seq_${Math.floor(Math.random() * 99999999)}`));
+document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow(name = `seq_${Math.floor(Math.random() * 99999999)}`));
 // Handle uploading and plotting data from multiple E-Score files
 document.getElementById('upload-and-plot').addEventListener('click', uploadAndPlot);
 // Manage tab change
 document.addEventListener("DOMContentLoaded", manageModeViews);
+// Show cookies notice
+document.addEventListener("DOMContentLoaded", showCookiesNotice);
 // Verify the plots take the right width when tab is changed
 document.addEventListener("shown.bs.tab", e => resizePlotsInTab(e.target.hash));
 
@@ -1244,8 +1282,8 @@ async function uplfoadAndPlot() {
     const formData = new FormData(document.getElementById('upload-form'));
     formData.append('sequences', JSON.stringify({
         //"WT":"AAAGCTGCTCTCAGTTTTTCAAGTCACACACACACACACACACACACACTCACACACACGGGTGGGGGAGTGTCTGTCATGGACACAGCTGTGTCAGTGTGGTTGCTCAGAGATCTGAGTTGCTCTAGCACTAGGTGCAGTTTATTTCACAGCCCTAAAGAGATTTACGGCTGTTTTTTCTTCATTGGGGCCAAACATGGGGCCTGATAGGGAGGGCGTTGCACCAAAGGCAACAGAGACTACCATGAAAGTCCCTACAAACCTAACCTGAGCAGAGGACTGAAGAATGCAGAAAGGGACACTCAGGTAACAGACCATGGGACATAACAGCCATCTGTTGCTGGCCTTGGGTCTGATAAGGTCTCAGGGGCTGAAGGTGTAGGTTCAAAACACCTGGATCTTCGGAGCTCTGAGAGTACTTCATGCTATCACCACAAGCAAGGGGTCAGTTTTCTGCATGTCCTTGCTTGTCATGTGCCTAGGAATCCCACAGCCAGCTCATCCACTAAGCAGGGATAAGTTGACTCTGGGGCACCTGGAGGACCTGTTCTAGACCTCCACGTCCTAGCTCCGTTATTTCCATCACCTGCAGGATTGCACACTGTCACCCCCCCCCCAACACCCCCAGACGACGCGTCTTGCGTCTCAGGGGCACACCACTGGCTTCTGTGTCGCCCACTCCTCTCCACTCCCCACAGGCTCATCCGGACGATCCACGTGCAGCTCGACCGGGGGTTGGCGCCGCACCTCGAGCCCGGCGCGTCTGGCCGGAGCTTTCTGGGGACCCGAACCCCCCAACCCCCGCGAGAGGGCGGCATCTGGCGACCGCGGGTCGGGCAGGGGGGCGTCCTAAAGTCCCCTGCGGTGCAGAGACGTTGCGGCCGGCTGCCACACAAAGGCGGCGGCGGGAAGGCGGGGCGGGGCGGGCCGGGGGGCGGGGGAGGCAGGAAGGGGCGGGGGCGGCGGCGGCGATAAAGCCCCCGCGCGGCCCGGCCGGCTA",
-        "WT":"TGGCTTGGGCAAGCAAACCACAACAATGGTCAGACTGATAAAGCCCCT",
-        "del":"TGGCTTGGGCAAGCAAACCACAATGGTCAGACTGATAAAGCCCCT"
+        "WT": "TGGCTTGGGCAAGCAAACCACAACAATGGTCAGACTGATAAAGCCCCT",
+        "del": "TGGCTTGGGCAAGCAAACCACAATGGTCAGACTGATAAAGCCCCT"
     }));
     formData.append('ref_name', "WT");
     formData.append('file_type', 'escore');
@@ -1261,7 +1299,7 @@ async function uplfoadAndPlot() {
     // formData.append('score_5', 140);
     formData.forEach((value, key) => console.log(key, value));
 
-    await fetch('/upload', { method: 'POST', body: formData })
+    await fetch('/upload', {method: 'POST', body: formData})
         .then(response => response.json())
         .then(plotData => handlePlotData(plotData))
         .catch(handleError);

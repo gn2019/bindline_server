@@ -169,3 +169,38 @@ div#thresholds input:disabled {
 .text-justify {
     text-align: justify;
 }
+
+.cookie-notice {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  max-width: 320px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  font-size: 0.9rem;
+  z-index: 1050;
+  display: none;
+  animation: slideUp 0.4s ease-out;
+}
+
+.cookie-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.cookie-text {
+  color: #555;
+  line-height: 1.4;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
