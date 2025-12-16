@@ -736,10 +736,11 @@ function createBindingSiteTraces(plotData) {
     const colorPalettes = getColorPalettes(); // Get color palettes for consistent coloring
     const yLabels = []; // Store unique y-axis labels
 
+    const scoreFilesNum = Object.keys(plotData.binding_sites).length;
     Object.entries(plotData.binding_sites).reverse().forEach(([fileName, fileBindingSites], fileIndex) => {
-        const colorPalette = colorPalettes[fileIndex % colorPalettes.length];
-
-        Object.entries(fileBindingSites).forEach(([seqName, bindingSites], seqIndex) => {
+        const colorPalette = colorPalettes[(scoreFilesNum - 1 - fileIndex) % colorPalettes.length];
+        const seqsNum = Object.keys(fileBindingSites).length;
+        Object.entries(fileBindingSites).reverse().forEach(([seqName, bindingSites], seqIndex) => {
             const yLabel = `${seqName} (${fileName})`; // Create the y-axis label
             if (!yLabels.includes(yLabel)) {
                 yLabels.push(yLabel); // Add label to y-axis categories
@@ -747,7 +748,7 @@ function createBindingSiteTraces(plotData) {
 
             bindingSites.forEach(range => {
                 const [start, end, seq, bsStart, bsEnd, isAdded] = range;
-                const color = isAdded ? `rgba(${hexToRGB(colorPalette[seqIndex % colorPalette.length])}, 0.5)` : 'rgba(211, 211, 211, 0.5)';
+                const color = isAdded ? `rgba(${hexToRGB(colorPalette[(seqsNum - 1 - seqIndex) % colorPalette.length])}, 0.5)` : 'rgba(211, 211, 211, 0.5)';
 
                 // Add the binding site trace
                 bindingSiteTraces.push({
