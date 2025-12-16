@@ -52,7 +52,7 @@
     </h4>
     <div class="collapse show" id="quickStartBody">
         <p>
-            BindLine lets you visualize and compare protein–DNA binding directly along DNA sequences using PBM data.
+            BindLine lets you visualize and compare protein–DNA binding levels directly along any DNA sequence using PBM data.
         </p>
         <ol>
             <li>Select a protein dataset (public PBM data or your own uploaded results).</li>
@@ -76,7 +76,7 @@
                 BindLine is an interactive web tool for exploring protein–DNA interactions using Protein Binding Microarray (PBM) data.
                 PBM experiments measure binding affinities for all possible DNA k-mers (sequences in lengths "k"), allowing binding preferences to be examined along full DNA sequences rather than summarized as a single consensus motif.
                 <br>
-                BindLine visualizes these quantitative scores directly on DNA sequences,
+                BindLine visualizes these quantitative scores directly on any DNA sequence,
                 enabling identification of binding sites even when binding is weak, degenerate, or distributed across multiple sequence contexts.
                 <br>
                 BindLine is an interactive tool, allowing users a smooth exploration of their data through zooming, panning, and toggling visibility of sequences and proteins.
@@ -110,10 +110,8 @@
             BindLine operates on protein PBM results and DNA sequences.
             <br>
             You may choose from public PBM datasets or upload your own.
-            Some of the public results, and possibly yours, has only part of the score types.
-            Types that are excluded from the uploaded results are unsupported.
-            You can choose the desired type before analysis. You may use existing public results or use your own.
             As a logged-on user you may upload files for a continuous use.
+            Some of the public results, and possibly yours, has only part of the score types (see below).
             <br>
             DNA sequences can be loaded from FASTA files or entered directly in the sequence table.
             All sequences in a single analysis must be aligned.
@@ -148,6 +146,8 @@
             <li><strong>E-score</strong> – Rank-based normalized enrichment score (−0.5 to 0.5).</li>
         </ul>
         <p class="text-justify">
+            Score types that are excluded from the uploaded PBM results are unsupported.
+            You can choose the desired type before analysis.
             The "BindLine" plot displays the selected score along the aligned sequences.
             Each point corresponds to the score of the k-mer starting at that nucleotide position.
         </p>
