@@ -658,6 +658,18 @@ function createTraces(plotData) {
             });
         }
     });
+    // add the horizontal threshold shiny line if exists
+    if (plotData.threshold !== undefined && plotData.threshold !== null) {
+        traces.push({
+            x: [0, Math.max(...Object.values(plotData.aligned_positions).flat())],
+            y: [plotData.threshold, plotData.threshold],
+            mode: "lines",
+            name: 'Threshold',
+            line: {dash: 'dot', color: 'red'},
+            showlegend: false,
+            hovertemplate: `Threshold: ${plotData.threshold}<extra></extra>`,
+        });
+    }
     // if more than one protein, add a separator trace
     if (Object.keys(plotData.aligned_scores).length > 1) {
         traces.push({
@@ -751,9 +763,15 @@ function createBindingSiteTraces(plotData) {
                     hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`, // Tooltip
                     showlegend: false // Show the legend only for the first trace of a file/sequence
                 });
+                // x values are all the integers from start to end
+                const xs = [
+                    ...(Number.isInteger(start) ? [] : [start]),
+                    ...Array.from({ length: Math.floor(end) - Math.ceil(start) + 1 },(_, i) => Math.ceil(start) + i),
+                    ...(Number.isInteger(end) ? [] : [end])
+                ];
                 bindingSiteTraces.push({
-                    x: Array.from({length: end - start + 1}, (_, i) => start + i),
-                    y: Array(end - start + 1).fill(yLabel),
+                    x: xs,
+                    y: Array(xs.length).fill(yLabel),
                     mode: "markers",
                     marker: {
                         color: color,

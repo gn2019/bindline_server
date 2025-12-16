@@ -367,6 +367,7 @@ def find_binding_sites():
         'highest_values': identified_binding_sites,
         'insertions': insertions,
         'gaps': gaps,
+        'threshold': selected_threshold,
     }
 
     print(plot_data)  # TODO: remove
@@ -458,6 +459,7 @@ def find_significant_mutations():
         'insertions': insertions,
         'gaps': gaps,
         'mutants_effect': mutants_effect,
+        'threshold': selected_threshold,
     }
 
     return Response(
@@ -517,6 +519,7 @@ def upload_files_():
         'aligned_scores': aligned_scores,
         'aligned_positions': aligned_positions,
         'max_scores': max_scores,
+        'threshold': selected_threshold,
     }
     if should_show_binding_sites:
         plot_data.update({
