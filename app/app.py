@@ -160,7 +160,7 @@ def get_score_files(request):
             # take their names
             return [(file.filename, get_file_path(file)) for file in stored_files]
         else:
-            return [(score_file.filename, (score_file.stream.seek(0) or io.TextIOWrapper(score_file.stream, encoding="utf-8")))
+            return [(score_file.filename, io.StringIO(score_file.read().decode("utf-8")))
                     for score_file in request.files.getlist('score')]
     else:
         score_files = []
@@ -259,8 +259,7 @@ def get_sequences_():
                 return jsonify({'error': 'Failed to upload FASTA file.'}), 500
         else:
             # pass as a stream without saving
-            fasta_file.stream.seek(0)
-            fasta_path = io.TextIOWrapper(fasta_file.stream, encoding="utf-8")
+            fasta_path = io.StringIO(fasta_file.read().decode("utf-8"))
     elif existing_fasta:
         file = files.get_file_by_name(existing_fasta, files.FileType.FASTA)
         if not file:
