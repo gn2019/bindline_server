@@ -13,55 +13,12 @@ from . import bindline
 from . import files
 
 
-def recursive_dir(path):
-    path = os.path.abspath(path)
-    return [os.path.join(root, file)[len(path)+1:] for root, _, files in os.walk(path) for file in files]
-
-
-def recursive_dir_under_root(root, path, include_dirname=True):
-    files = recursive_dir(os.path.join(root, path))
-    if include_dirname:
-        return list(map(lambda f: os.path.join(path, f), files))
-    else:
-        return files
-
-
-def list_user_score_file_names(username, include_username=True):
-    return [f.filename for f in files.list_user_score_files()]
-    return recursive_dir_under_root(consts.SCORE_DIR, username, include_dirname=include_username) if username else []
-
-
-def list_user_fasta_file_names(username, include_username=True):
-    return [f.filename for f in files.list_user_fasta_files()]
-    return recursive_dir_under_root(consts.FASTA_DIR, username, include_dirname=include_username) if username else []
-
-
-def list_public_score_file_names(include_username=True):
-    return [f.filename for f in files.list_public_score_files()]
-    return list_user_score_file_names(consts.PUBLIC_DIR, include_username=include_username)
-
-
-def list_public_fasta_file_names(include_username=True):
-    return [f.filename for f in files.list_public_fasta_files()]
-    return list_user_fasta_file_names(consts.PUBLIC_DIR, include_username=include_username)
-
-
-def list_user_public_score_file_names(username=None):
-    return sum(map(lambda fs: [f.filename for f in fs], files.list_user_public_score_files()), [])
-    user_files = list_user_score_file_names(username)
-    public_files = list_public_score_file_names()
-    return user_files, public_files
-
-
 def list_user_public_score_file_jsons():
     return sum(map(lambda fs: [f.to_public_json() for f in fs], files.list_user_public_score_files()), [])
 
 
-def list_user_public_fasta_file_names(username=None):
+def list_user_public_fasta_file_names():
     return sum(map(lambda fs: [f.filename for f in fs], files.list_user_public_fasta_files()), [])
-    user_files = list_user_fasta_file_names(username)
-    public_files = list_public_fasta_file_names()
-    return user_files, public_files
 
 
 def get_insertion_fractions(num_of_fractions, base_index):

@@ -208,11 +208,11 @@ def get_identifier_by_type(file_type):
 def list_files(*args, **kwargs):
     return error_wrapped(list_files_)(*args, **kwargs)
 
+
 def list_files_(file_type):
     """Lists public and user-specific files for FASTA or E-Score files."""
-    username = current_user.username if current_user.is_authenticated else None
     if file_type == consts.FASTA:
-        return jsonify(list_user_public_fasta_file_names(username))
+        return jsonify(list_user_public_fasta_file_names())
     elif file_type == consts.SCORE:
         return jsonify(list_user_public_score_file_jsons())
     else:
