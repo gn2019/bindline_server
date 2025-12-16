@@ -94,7 +94,16 @@
 <div class="help-section">
     <h4><i class="help-icon fas fa-play-circle"></i> Basic usage</h4>
 
-<h5>Protein and DNA input</h5>
+<div class="row">
+    <div class="col">
+        <h5>Protein and DNA input</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}?sample_id=1" class="btn btn-warning btn-sm">
+            <i class="fas fa-flask me-1"></i> Load Sample
+        </a>
+    </div>
+</div>
 <div class="row align-items-center">
     <div class="col-md-8">
         <p class="text-justify">
@@ -114,12 +123,21 @@
         </p>
     </div>
     <div class="col-md-4 img-col">
-        <img src="{{ url_for('static', filename='img/help_scoring.png') }}" alt="Input">
+        <img src="{{ url_for('static', filename='img/help_seq_table.png') }}" alt="Input">
     </div>
 </div>
 
-<h5 class="mt-4">Scoring</h5>
 <div class="row">
+    <div class="col">
+        <h5>Scoring</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}?sample_id=1" class="btn btn-warning btn-sm">
+            <i class="fas fa-flask me-1"></i> Load Sample
+        </a>
+    </div>
+</div>
+<div class="row align-items-center">
     <div class="col-md-8">
         <p class="text-justify">
             BindLine supports three types of PBM scores to evaluate protein–DNA binding:
@@ -134,10 +152,22 @@
             Each point corresponds to the score of the k-mer starting at that nucleotide position.
         </p>
     </div>
+    <div class="col-md-4 img-col">
+        <img src="{{ url_for('static', filename='img/help_scoring.png') }}" alt="Scoring">
+    </div>
 </div>
 
-<h5 class="mt-4">Threshold settings</h5>
 <div class="row">
+    <div class="col">
+        <h5>Threshold settings</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('index') }}?sample_id=2" class="btn btn-warning btn-sm">
+            <i class="fas fa-flask me-1"></i> Load Sample
+        </a>
+    </div>
+</div>
+<div class="row align-items-center">
     <div class="col-md-8">
         <p class="text-justify">
             BindLine offers applying thresholds for each score type, enabling identification of significant binding events.
