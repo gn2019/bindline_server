@@ -189,8 +189,13 @@ function createTextAreaTd(value) {
     const cell = document.createElement('td');
     const sequenceInput = document.createElement('textarea');
     sequenceInput.rows = 2;
-    sequenceInput.cols = 120;
     sequenceInput.value = value;
+
+    // responsive behavior
+    sequenceInput.style.width = '100%';
+    sequenceInput.style.resize = 'vertical';
+    sequenceInput.style.boxSizing = 'border-box';
+
     cell.appendChild(sequenceInput);
     return cell;
 }

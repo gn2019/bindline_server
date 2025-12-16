@@ -204,3 +204,13 @@ div#thresholds input:disabled {
     opacity: 1;
   }
 }
+
+.sequence-col {
+  width: 70%;
+}
+
+.sequence-col textarea {
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 100%;
+}
