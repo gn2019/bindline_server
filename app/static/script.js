@@ -1301,13 +1301,14 @@ function showCookiesNotice() {
 }
 
 
-function animateAllMutants(centerOnWT) {
+function animateAllMutants() {
+    isCenteredOnWT = !isCenteredOnWT;
     const plot = document.getElementById('all-mutants-plot');
 
     const newY = plot.data.map(trace => {
         if (trace.delta === undefined) return trace.y;
 
-        const ref = centerOnWT ? trace.wt : 0;
+        const ref = isCenteredOnWT ? trace.wt : 0;
         if (trace.mode === "lines") {
             return [ref, ref + trace.delta];
         } else {  // markers
@@ -1333,20 +1334,15 @@ function animateAllMutants(centerOnWT) {
 
     // show to WT curve if centerOnWT
     const wtIndex = plot.data.findIndex(trace => trace.isWT);
-    Plotly.restyle(plot, {visible: centerOnWT ? true : 'legendonly'}, [wtIndex]);
+    Plotly.restyle(plot, {visible: isCenteredOnWT ? true : 'legendonly'}, [wtIndex]);
     // change y axis label
     Plotly.relayout(plot, {
-        'yaxis.title.text': centerOnWT ? 'Score' : 'Effect (ΔScore)'
+        'yaxis.title.text': isCenteredOnWT ? 'Score' : 'Effect (ΔScore)'
     });
 }
 
 let isCenteredOnWT = false;
-document.getElementById('toggle-wt-center')
-    .addEventListener('change', () => {
-        isCenteredOnWT = !isCenteredOnWT;
-        animateAllMutants(isCenteredOnWT);
-    });
-
+document.getElementById('toggle-wt-center').addEventListener('change', animateAllMutants);
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', loadSequences);
