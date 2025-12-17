@@ -993,10 +993,12 @@ function syncPlots(plots) {
 
     // if only one plot, return
     if (plots.length < 2) return;
+    isSyncing = true; // avoid syncing on initial plot
     // Attach the same sync handler to all plots
     plots.forEach(plot => {
         plot.on('plotly_afterplot', () => syncRange(plot));
     });
+    isSyncing = false;
 }
 
 
@@ -1029,19 +1031,18 @@ function get_gaps(aligned_seq) {
 }
 
 let isSettingTicks = {}; // Flag to prevent recursion
-let prevRange = [0, 0]; // Flag to prevent self-calls
+let prevRange = {}; // Flag to prevent self-calls
 function setXTicks(plotDiv) {
     if (isSettingTicks[plotDiv.id]) return; // Avoid recursive calls
     isSettingTicks[plotDiv.id] = true; // Set the flag to indicate we're inside the function
 
     // x-axis range of the plot
     let [xStart, xEnd] = plotDiv.layout.xaxis.range;
-    if (xStart === prevRange[0] && xEnd === prevRange[1]) {
+    if (prevRange[plotDiv.id] && xStart === prevRange[plotDiv.id][0] && xEnd === prevRange[plotDiv.id][1]) {
         isSettingTicks[plotDiv.id] = false; // Reset the flag before returning
         return; // No change in range
     } else {
-        prevRange[0] = xStart;
-        prevRange[1] = xEnd;
+        prevRange[plotDiv.id] = [xStart, xEnd];
     }
     xStart = Math.max(0, Math.ceil(xStart));
     xEnd = Math.min(plotDiv.sequence_str.length, Math.floor(xEnd + 1));
