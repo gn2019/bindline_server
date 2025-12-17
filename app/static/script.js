@@ -391,7 +391,7 @@ async function handlePlotData(plotData) {
     if (plotData.error) {
         return;
     }
-    console.log(plotData); // TODO: remove
+    // console.log(plotData);
 
     const plotComponents = {
         bindline: {
@@ -621,7 +621,7 @@ function createTraces(plotData) {
                 mode: 'markers',
                 showlegend: false,  // Hide max score line from legend
                 legendgroup: `${seqName} (${fileName})`,
-                text: alignedScores.map((_, i) => getKmerSeqFromAlignedSeq(alignedSeq, k, i)), // Tooltip showing sequence segment, TODO: 8 is hardcoded
+                text: alignedScores.map((_, i) => getKmerSeqFromAlignedSeq(alignedSeq, k, i)), // Tooltip showing sequence segment
                 // tooltip should be the text variable
                 hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
                 marker: {color: colorPalette[seqIndex % colorPalette.length], size: 10, symbol: 'circle'},
@@ -947,7 +947,6 @@ function getBindingSitesPlotLayout(yLabels) {
         },
         hovermode: 'closest',
         showlegend: true,
-        // TODO: makes problems with the annotations
         height: baseHeight + labelHeight * yLabels.length, // Adjust height based on number of labels
     };
 }
@@ -1373,35 +1372,4 @@ getRadio("file_type").forEach(radio => {
 for (let threshold of ['escore', 'zscore', 'iscore', 'ranks']) {
     toggleSliderAndInput(`enable_${threshold}_threshold`, `${threshold}_threshold_slider`, `${threshold}_threshold_input`);
     syncSliderAndInput(`${threshold}_threshold_slider`, `${threshold}_threshold_input`);
-}
-
-
-// TODO: remove
-async function uplfoadAndPlot() {
-    showGlobalLoading(); // Show loading animation before request
-
-    const formData = new FormData(document.getElementById('upload-form'));
-    formData.append('sequences', JSON.stringify({
-        //"WT":"AAAGCTGCTCTCAGTTTTTCAAGTCACACACACACACACACACACACACTCACACACACGGGTGGGGGAGTGTCTGTCATGGACACAGCTGTGTCAGTGTGGTTGCTCAGAGATCTGAGTTGCTCTAGCACTAGGTGCAGTTTATTTCACAGCCCTAAAGAGATTTACGGCTGTTTTTTCTTCATTGGGGCCAAACATGGGGCCTGATAGGGAGGGCGTTGCACCAAAGGCAACAGAGACTACCATGAAAGTCCCTACAAACCTAACCTGAGCAGAGGACTGAAGAATGCAGAAAGGGACACTCAGGTAACAGACCATGGGACATAACAGCCATCTGTTGCTGGCCTTGGGTCTGATAAGGTCTCAGGGGCTGAAGGTGTAGGTTCAAAACACCTGGATCTTCGGAGCTCTGAGAGTACTTCATGCTATCACCACAAGCAAGGGGTCAGTTTTCTGCATGTCCTTGCTTGTCATGTGCCTAGGAATCCCACAGCCAGCTCATCCACTAAGCAGGGATAAGTTGACTCTGGGGCACCTGGAGGACCTGTTCTAGACCTCCACGTCCTAGCTCCGTTATTTCCATCACCTGCAGGATTGCACACTGTCACCCCCCCCCCAACACCCCCAGACGACGCGTCTTGCGTCTCAGGGGCACACCACTGGCTTCTGTGTCGCCCACTCCTCTCCACTCCCCACAGGCTCATCCGGACGATCCACGTGCAGCTCGACCGGGGGTTGGCGCCGCACCTCGAGCCCGGCGCGTCTGGCCGGAGCTTTCTGGGGACCCGAACCCCCCAACCCCCGCGAGAGGGCGGCATCTGGCGACCGCGGGTCGGGCAGGGGGGCGTCCTAAAGTCCCCTGCGGTGCAGAGACGTTGCGGCCGGCTGCCACACAAAGGCGGCGGCGGGAAGGCGGGGCGGGGCGGGCCGGGGGGCGGGGGAGGCAGGAAGGGGCGGGGGCGGCGGCGGCGATAAAGCCCCCGCGCGGCCCGGCCGGCTA",
-        "WT": "TGGCTTGGGCAAGCAAACCACAACAATGGTCAGACTGATAAAGCCCCT",
-        "del": "TGGCTTGGGCAAGCAAACCACAATGGTCAGACTGATAAAGCCCCT"
-    }));
-    formData.append('ref_name', "WT");
-    formData.append('file_type', 'escore');
-    formData.append('show_diff_only', 'false');
-    formData.append('search_significant_mutations', 'false');
-    formData.append('search_binding_sites', 'false');
-    // formData.append('ranks_threshold_input', '90');
-    formData.append('score_0', 36);
-    formData.append('score_1', 137);
-    // formData.append('score_2', 137);
-    // formData.append('score_3', 138);
-    // formData.append('score_4', 139);
-    // formData.append('score_5', 140);
-    formData.forEach((value, key) => console.log(key, value));
-
-    await fetch('/upload', {method: 'POST', body: formData})
-        .then(response => response.json())
-        .then(plotData => handlePlotData(plotData))
-        .catch(handleError);
 }
