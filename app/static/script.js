@@ -586,12 +586,15 @@ function handleError(error) {
 function createTraces(plotData) {
     const traces = [];
     const colorPalettes = getColorPalettes();
+    let globalLastPosition = 0;
 
     Object.entries(plotData.aligned_scores).forEach(([fileName, fileScores], fileIndex) => {
         const colorPalette = colorPalettes[fileIndex % colorPalettes.length];
+        let lastPosition = 0;
 
         Object.entries(fileScores).forEach(([seqName, alignedScores], seqIndex) => {
             const alignedSeq = plotData.aligned_seqs[seqName];
+            lastPosition = Math.max(lastPosition, plotData.aligned_positions[seqName][alignedScores.length - 1]);
             const trace = {
                 x: plotData.aligned_positions[seqName],
                 y: alignedScores,
@@ -630,10 +633,11 @@ function createTraces(plotData) {
             };
             traces.push(highlightTrace);
         });
+        globalLastPosition = Math.max(globalLastPosition, lastPosition);
 
         const maxScore = plotData.max_scores[fileName];
         const maxScoreLine = {
-            x: [0, Math.max(...Object.values(fileScores).map(s => s.length))],
+            x: [0, lastPosition],
             y: [maxScore, maxScore],
             mode: 'lines',
             name: 'Maximal Score',
@@ -663,7 +667,7 @@ function createTraces(plotData) {
     // add the horizontal threshold shiny line if exists
     if (plotData.threshold !== undefined && plotData.threshold !== null) {
         traces.push({
-            x: [0, Math.max(...Object.values(plotData.aligned_positions).flat())],
+            x: [0, globalLastPosition],
             y: [plotData.threshold, plotData.threshold],
             mode: "lines",
             name: 'Threshold',
