@@ -56,11 +56,11 @@
         </p>
         <ol>
             <li>Select a protein dataset (public PBM data or your own uploaded results).</li>
-            <li>Load DNA sequences (FASTA files or manual input). Sequences must be aligned; the first sequence is used as the reference.</li>
-            <li>Choose a score type (E-score is recommended for most analyses).</li>
+            <li>Load one or more DNA sequences (via FASTA files or manual input). When multiple sequences are uploaded for comparison, they must be aligned, with the first sequence serving as the reference.</li>
+            <li>Choose a score type (E-score and Z-scores provide comparable, dimensionless measures).</li>
             <li>Inspect the BindLine plot to identify regions of strong or differential binding.</li>
             <li>Optionally apply thresholds to highlight binding sites and enable additional plots.</li>
-            <li>Use advanced options to search across proteins, scan mutations, or focus on differences from the reference.</li>
+            <li>Use advanced options to search across proteins, scan the full input sequence for single–base-pair variant effects, or compare binding predictions to a reference sequence.</li>
         </ol>
     </div>
 </div>
@@ -74,7 +74,7 @@
         <div class="col-md-8">
             <p class="text-justify">
                 BindLine is an interactive web tool for exploring protein–DNA interactions using Protein Binding Microarray (PBM) data.
-                PBM experiments measure binding affinities for all possible DNA k-mers (sequences in lengths "k"), allowing binding preferences to be examined along full DNA sequences rather than summarized as a single consensus motif.
+                PBM experiments measure relative binding strength of all possible DNA k-mers (sequences in lengths "k"), allowing binding preferences to be examined along full DNA sequences rather than summarized as a single consensus motif.
                 <br>
                 BindLine visualizes these quantitative scores directly on any DNA sequence,
                 enabling identification of binding sites even when binding is weak, degenerate, or distributed across multiple sequence contexts.
@@ -142,7 +142,7 @@
         </p>
         <ul>
             <li><strong>I-score</strong> – Raw median fluorescence intensity.</li>
-            <li><strong>Z-score</strong> – Statistical significance relative to the k-mer distribution (0 is the median).</li>
+            <li><strong>Z-score</strong> – A measure of binding deviation from the median level observed across all k-mers.</li>
             <li><strong>E-score</strong> – Rank-based normalized enrichment score (−0.5 to 0.5).</li>
         </ul>
         <p class="text-justify">
@@ -306,8 +306,13 @@
         <div class="col-md-8">
             <p class="text-justify">
                 Public PBM score files and FASTA sequences can be downloaded from the <a href="/data">Data</a> page.
-                Logged-in users can manage uploaded files through their personal dashboard, including downloading
-                or deleting files at any time.
+                Logged-in users can manage uploaded files through their
+                {% if (current_user.is_authenticated) %}
+                    <a href="/dashboard">personal dashboard</a>,
+                {% else %}
+                    personal dashboard,
+                {% endif %}
+                including downloading or deleting files at any time.
             </p>
         </div>
         <div class="col-md-4 img-col">
