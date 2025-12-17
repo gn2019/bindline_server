@@ -183,23 +183,34 @@ class TFIdentifier:
         """
         Remove a TF ID from all k-mer matrices
         """
-        for k in self.kmers:
+        for k in self.kmers.copy():
             if k in self.abs_ids and tf_id in self.abs_ids[k]:
                 abs_idx = np.where(self.abs_ids[k] == tf_id)[0][0]
                 self.abs_mat[k] = np.delete(self.abs_mat[k], abs_idx, axis=0)
                 self.abs_ids[k] = np.delete(self.abs_ids[k], abs_idx, axis=0)
                 if should_save:
                     os.makedirs(self._abs_folder, exist_ok=True)
-                    np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
-                    np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+                    # if table is empty, remove files
+                    if self.abs_mat[k].shape[0] == 0:
+                        (self._abs_folder / f"{k}_abs.npy").unlink(missing_ok=True)
+                        (self._abs_folder / f"{k}_abs_ids.npy").unlink(missing_ok=True)
+                        self.kmers.discard(k)
+                    else:
+                        np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+                        np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
             if should_update_ranks and k in self.rank_ids and tf_id in self.rank_ids[k]:
                 ranks_idx = np.where(self.rank_ids[k] == tf_id)[0][0]
                 self.rank_mat[k] = np.delete(self.rank_mat[k], ranks_idx, axis=0)
                 self.rank_ids[k] = np.delete(self.rank_ids[k], ranks_idx, axis=0)
                 if should_save:
                     os.makedirs(self._ranks_folder, exist_ok=True)
-                    np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
-                    np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+                    if self.rank_mat[k].shape[0] == 0:
+                        (self._ranks_folder / f"{k}_rank.npy").unlink(missing_ok=True)
+                        (self._ranks_folder / f"{k}_rank_ids.npy").unlink(missing_ok=True)
+                        self.kmers.discard(k)
+                    else:
+                        np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                        np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
     def copy(self):
         """
