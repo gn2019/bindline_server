@@ -77,7 +77,7 @@ def align_scores(ref_seq, seq, scores):
 def align_sequences_by_name(name, seq):
     name = name.split(' ')[-3:]
     typ = name[-1]
-    if typ == 'mutation':
+    if typ == 'substitution':
         return seq
     if typ == 'insertion':
         pos = int(name[-3])
@@ -93,7 +93,7 @@ def align_scores_by_name(name, seq, scores):
     name = name.split(' ')[-3:]
     typ = name[-1]
     aligned_pos = list(range(len(seq)))
-    if typ == 'mutation':
+    if typ == 'substitution':
         return seq, aligned_pos, list(scores)
     elif typ == 'insertion':
         pos = int(name[-3])
@@ -171,7 +171,7 @@ def get_all_point_mutations(sequence):
     for i, base in enumerate(sequence):
         for c in consts.DNA_BASES:
             if base != c:
-                mutants[f'{i} {base}->{c} mutation'] = sequence[:i] + c + sequence[i + 1:]
+                mutants[f'{i} {base}->{c} substitution'] = sequence[:i] + c + sequence[i + 1:]
     return mutants
 
 
@@ -227,7 +227,7 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
         if name == ref_name:
             continue
         mut = name.split(' ')[-3:]
-        if mut[-1] != 'mutation':
+        if mut[-1] != 'substitution':
             continue
         mut_base = mut[-2].split('->')[-1]
         mut_pos = int(mut[-3])
