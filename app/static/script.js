@@ -1015,20 +1015,6 @@ function getColorPalettes() {
     ];
 }
 
-function get_gaps(aligned_seq) {
-    const gaps = [];
-    let start = -1;
-
-    for (let i = 0; i <= aligned_seq.length; i++) {
-        if (aligned_seq[i] === '-') {
-            if (start === -1) start = i;
-        } else if (start !== -1) {
-            gaps.push([start, i - 1]);
-            start = -1;
-        }
-    }
-    return gaps;
-}
 
 let isSettingTicks = {}; // Flag to prevent recursion
 let prevRange = {}; // Flag to prevent self-calls
