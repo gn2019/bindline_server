@@ -691,12 +691,18 @@ function createTraces(plotData) {
     }
     // collect sequences that have lines
     const sequencesWithLines = [];
+    const sequencesWithMultipleLines = [];
     Object.keys(plotData.aligned_seqs).forEach((seqName) => {
-        if (traces.some(trace => trace.sequence === seqName && !trace.isMetaSequence)) {
+        const numLines = traces.filter(trace => trace.sequence === seqName && !trace.isMetaSequence).length;
+        if (numLines > 0) {
             sequencesWithLines.push(seqName);
+            if (numLines > 1) {
+                sequencesWithMultipleLines.push(seqName);
+            }
         }
     });
-    if (sequencesWithLines.length > 1) {
+    const shouldShowMetaSequences = sequencesWithLines.length > 1 && sequencesWithMultipleLines.length > 0;
+    if (shouldShowMetaSequences) {
         sequencesWithLines.forEach((seqName) => {
             traces.push({
                 x: [null],
