@@ -410,10 +410,9 @@ def find_significant_mutations():
                 aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = sequence_str, list(range(len(sequences[name]))), list(sequence_scores)
             else:
                 aligned_seqs[name], aligned_positions[name], curr_aligned_scores[name] = align_scores_by_name(name, sequence_str, sequence_scores)
-
         highest_values[score_file], binding_sites[score_file], gaps[score_file], insertions[score_file] = find_highest_values_and_binding_sites(
-            aligned_scores[score_file], aligned_positions, sequences, ref_name, selected_threshold, ranks_threshold, table)
-
+            aligned_scores[score_file], aligned_positions, sequences, ref_name, selected_threshold, ranks_threshold, table,
+            point_mutations_only=True)
         # reduce binding sites
         # leave only one occurrence of each threesome
         bs_set = set()
@@ -429,7 +428,6 @@ def find_significant_mutations():
 
         # create MPRA-like data
         mutants_effect, ref_effect = get_all_mutants_effect(aligned_scores[score_file], sequences, ref_name, mer=table.mer)
-
         curr_binding_sites = binding_sites[score_file]
         for name in sequences.keys():
             if name == ref_name:

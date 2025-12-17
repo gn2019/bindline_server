@@ -74,6 +74,7 @@ def align_scores(ref_seq, seq, scores):
     return aligned_seq, aligned_pos, aligned_scores
 
 
+@functools.lru_cache(maxsize=4**8)
 def align_sequences_by_name(name, seq):
     name = name.split(' ')[-3:]
     typ = name[-1]
@@ -243,7 +244,7 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
 
 
 def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, sequences, ref_name,
-                                          selected_threshold, ranks_threshold, table):
+                                          selected_threshold, ranks_threshold, table, point_mutations_only=False):
     highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
     selected_threshold = selected_threshold if selected_threshold is not None else -np.inf
     ranks_threshold = table.rank_threshold(ranks_threshold) if ranks_threshold is not None else -np.inf
@@ -254,8 +255,12 @@ def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, seq
             (scores >= selected_threshold) & (scores >= ranks_threshold),
             scores, None
         ).tolist()
+        if name != ref_name:
+            aligned_seq = align_sequences_by_name(name, sequences[name]) if point_mutations_only else align_sequences(sequences[ref_name], sequences[name])
+        else:
+            aligned_seq = sequences[name]
         binding_sites[name], gaps[name], insertions[name] = get_binding_sites(
-            highest_values[name], align_sequences(sequences[ref_name], sequences[name]), table.mer, aligned_positions[name])
+            highest_values[name], aligned_seq, table.mer, aligned_positions[name])
 
     return highest_values, binding_sites, gaps, insertions
 
@@ -319,4 +324,3 @@ def get_insertions(seq, start, end, aligned_positions):
         (aligned_positions[match.start() + start] + aligned_positions[match.end() + start - 1]) / 2,
         seq[match.start() + start:match.end() + start].upper())
             for match in re.finditer(r'[a-z]+', seq[start:end + 1])]
-
