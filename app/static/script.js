@@ -970,13 +970,13 @@ function syncPlots(plots) {
                     Plotly.relayout(plot, {'xaxis.range': xRange})
                         .catch((error) => {
                             console.error(error);
-                            showToast('warning', error.message, 5000);
+                            showToast('warning', 'Failed to sync plots x-axis', 5000);
                         });
                 }
             });
         } catch (error) {
             console.error(error);
-            showToast('warning', error.message, 5000);
+            showToast('warning', 'Failed to sync plots x-axis', 5000);
         } finally {
             isSyncing = false;
         }
