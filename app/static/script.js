@@ -629,6 +629,10 @@ function createTraces(plotData) {
                 // tooltip should be the text variable
                 hovertemplate: "%{text}<extra></extra>",  // Customize hover tooltip
                 marker: {color: colorPalette[seqIndex % colorPalette.length], size: 10, symbol: 'circle'},
+                protein: fileName,
+                sequence: seqName,
+                isMetaProtein: false,
+                isMetaSequence: false,
                 k: k,
                 alignedSeq: alignedSeq,
             };
