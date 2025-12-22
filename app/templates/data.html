@@ -16,7 +16,7 @@
     <div class="row">
         <!-- Fasta Files Section -->
         <div class="col-md-6">
-            <h2 class="h5 text-secondary">Fasta Files</h2>
+            <h2 class="h5 text-secondary">DNA Fasta Files</h2>
             <form method="POST" action="{{ url_for('bulk_action', file_type='FASTA', is_public=true) }}">
                 <div class="mb-2">
                     <input type="checkbox" id="checkAllFasta" onclick="toggleAll('fasta')"> Check all
@@ -41,7 +41,7 @@
 
         <!-- Score Files Section -->
         <div class="col-md-6">
-            <h2 class="h5 text-secondary">Score Files</h2>
+            <h2 class="h5 text-secondary">Protein Score Files</h2>
             <form method="POST" action="{{ url_for('bulk_action', file_type='SCORE', is_public=true) }}">
                 <div class="mb-2">
                     <input type="checkbox" id="checkAllScore" onclick="toggleAll('score')"> Check all
