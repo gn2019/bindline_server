@@ -93,18 +93,28 @@ class TFIdentifier:
         :return: {k: thresholded_matrix, ...}
         """
         self._threshold_mat = {}
+
         for k in self.kmers:
             mat = None
+
             if abs_thr is not None and k in self.abs_mat:
                 m = self.abs_mat[k]
                 mat = np.where(m >= abs_thr, 1, np.nan)
+
             if rank_thr is not None and k in self.rank_mat:
                 r = self.rank_mat[k]
-                rank_thr *= np.nanmax(r) / 100
+                rank_ids = self.rank_ids[k]
+                order = np.argsort(rank_ids)
+                sorted_rank_ids = rank_ids[order]
+                idx = np.searchsorted(sorted_rank_ids, self.abs_ids[k])
+                r = r[order[idx]]
+                local_rank_thr = rank_thr * np.nanmax(r) / 100
+
                 if mat is None:
-                    mat = np.where(r >= rank_thr, 1, np.nan)
+                    mat = np.where(r >= local_rank_thr, 1, np.nan)
                 else:
-                    mat = np.where(r >= rank_thr, mat, np.nan)
+                    mat = np.where(r >= local_rank_thr, mat, np.nan)
+
             self._threshold_mat[k] = mat
 
     def __identify_one(self, seq, summarize: bool = False):
@@ -122,8 +132,7 @@ class TFIdentifier:
             mat = self._threshold_mat[k]  # TF × 4^k
             hits = ~np.isnan(mat[:, idxs])
             per_pos = [
-                [self.abs_ids[k][j] if k in self.abs_ids else self.rank_ids[k][j]
-                 for j in np.where(hits[:, i])[0]]
+                [self.abs_ids[k][j] for j in np.where(hits[:, i])[0]]
                 for i in range(hits.shape[1])
             ]
             if summarize:
