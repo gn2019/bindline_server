@@ -257,6 +257,7 @@ async function uploadAndPlot() {
         let selectedSequences = gatherSelectedSequences();
         const refName = getReferenceName(); // Now this will run after sequences are loaded
 
+        formData.delete("fasta"); // remove fasta from formData, as sequences are already gathered
         appendSequencesAndOptions(formData, selectedSequences, refName);
         validateConditions(formData, selectedSequences);
     } catch (error) {
