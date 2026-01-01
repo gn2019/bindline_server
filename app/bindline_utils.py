@@ -278,6 +278,21 @@ def show_diff_only(binding_sites, ref_name):
         binding_sites[protein_file][ref_name] = []
 
 
+def get_pfam_map(score_file_ids):
+    """
+    return a map from pfam_name to protein files
+    """
+    pfam_map = {}
+    for file_id in score_file_ids:
+        pfam_ids = files.get_pfam_ids(file_id)
+        if not pfam_ids:
+            filename = files.get_file_by_id(file_id).filename
+            pfam_map.setdefault(filename, []).append(filename)
+        for pfam_id in pfam_ids:
+            pfam_map.setdefault(files.get_pfam_name(pfam_id), []).append(files.get_file_by_id(file_id).filename)
+    return pfam_map
+
+
 def get_binding_sites(highest_values, seq, mer, aligned_positions):
     # indices of the not None values in curr_highest_values[name], by numpy
     bs = [i for i, value in enumerate(highest_values) if value is not None]

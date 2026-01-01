@@ -408,7 +408,10 @@ async function handlePlotData(plotData) {
             id: 'binding-sites-plot',
             checkFunc: plotData => plotData.binding_sites,
             traceFunc: createBindingSiteTraces,
-            layoutFunc: getBindingSitesPlotLayout
+            layoutFunc: getBindingSitesPlotLayout,
+            callbackFunc: (component) => {
+                handleClick(component.div);
+            }
         },
         allMutants: {
             id: 'all-mutants-plot',
@@ -479,6 +482,46 @@ async function handlePlotData(plotData) {
         syncPlots(Object.values(plotComponents).map(component => component.div));
     }, 500);
 }
+
+
+function handleClick(plotDiv) {
+    plotDiv.on('plotly_click', (e) => {
+        const trace = plotDiv.data[e.points[0].curveNumber];
+        if (!trace.pfam) {
+            return;
+        }
+        plotDiv.data.forEach((t, i) => {
+            if (t.pfam === trace.pfam) {
+                const changeTo = (t.y[0] === t.pfam ? t.file : t.pfam);
+                Plotly.restyle(plotDiv, {
+                    y: [Array(t.x.length).fill(changeTo)],
+                    name: [t.name ? changeTo : undefined],
+                    legendgroup: [t.legendgroup ? changeTo : undefined],
+                }, [i]);
+            }
+        });
+        const byPfams = new Map();
+        plotDiv.data.forEach(t => {
+            if (isVisible(t) && t.name) {
+                if (!byPfams.has(t.pfamName)) {
+                    byPfams.set(t.pfamName, {"pfamTraces": new Set(), "fileTraces": new Set()});
+                }
+                const placeToAdd = t.pfam === t.name ? "pfamTraces" : "fileTraces";
+                byPfams.get(t.pfamName)[placeToAdd].add(t.name);
+            }
+        });
+
+        const yLabels = [];
+        for (const pfamTraces of byPfams.values()) {
+            yLabels.push(
+                ...Array.from(pfamTraces.fileTraces),
+                ...Array.from(pfamTraces.pfamTraces),
+            );
+        }
+        Plotly.relayout(plotDiv, getBindingSitesPlotLayout(yLabels));
+    });
+}
+
 
 function handleLegendClick(plotDiv) {
     plotDiv.on('plotly_legendclick', (e) => {
@@ -748,98 +791,120 @@ function createTraces(plotData) {
     return [traces, null];
 }
 
+
+function shouldAggPfams(pfamMap, numSequences) {
+    // We want aggregation in 2 cases:
+    // 1. >1 pfams, >1 files, >1 per pfam
+    // 2. >1 seqs, 1 pfam, >1 files, >1 per pfam
+    const numPfams = Object.keys(pfamMap).length;
+    if (numPfams > 1 || (numSequences > 1 && numPfams <= 1)) {
+        const pfamFiles = Object.values(pfamMap);
+        return pfamFiles.some(f => f.length > 1) && new Set(pfamFiles.flat()).size > 1;
+    }
+    return false;
+}
+
+
 function createBindingSiteTraces(plotData) {
     const bindingSiteTraces = [];
     const colorPalettes = getColorPalettes(); // Get color palettes for consistent coloring
     const yLabels = []; // Store unique y-axis labels
 
-    const scoreFilesNum = Object.keys(plotData.binding_sites).length;
-    Object.entries(plotData.binding_sites).reverse().forEach(([fileName, fileBindingSites], fileIndex) => {
-        const colorPalette = colorPalettes[(scoreFilesNum - 1 - fileIndex) % colorPalettes.length];
-        const seqsNum = Object.keys(fileBindingSites).length;
-        Object.entries(fileBindingSites).reverse().forEach(([seqName, bindingSites], seqIndex) => {
-            const yLabel = `${seqName} (${fileName})`; // Create the y-axis label
-            if (!yLabels.includes(yLabel)) {
-                yLabels.push(yLabel); // Add label to y-axis categories
-            }
+    if (!shouldAggPfams(plotData.pfam_map, Object.keys(plotData.sequence_strs).length)) {
+        plotData.pfam_map = new Map();
+        Object.keys(plotData.binding_sites).forEach(fileName => {
+            plotData.pfam_map[fileName] = [fileName];
+        });
+    }
 
-            bindingSites.forEach(range => {
-                const [start, end, seq, bsStart, bsEnd, isAdded] = range;
-                const color = isAdded ? `rgba(${hexToRGB(colorPalette[(seqsNum - 1 - seqIndex) % colorPalette.length])}, 0.5)` : 'rgba(211, 211, 211, 0.5)';
+    const pfamNum = Object.keys(plotData.pfam_map).length;
+    Object.entries(plotData.pfam_map).forEach(([pfamName, fileNames], pfamIndex) => {
+        const colorPalette = colorPalettes[(pfamNum - 1 - pfamIndex) % colorPalettes.length];
+        for (const fileName of fileNames) {
+            const fileBindingSites = plotData.binding_sites[fileName];
+            const seqsNum = Object.keys(fileBindingSites).length;
+            Object.entries(fileBindingSites).reverse().forEach(([seqName, bindingSites], seqIndex) => {
+                const fileYLabel = `${seqName} (${fileName})`;
+                const pfamYLabel = fileName === pfamName ? undefined : `${seqName} (${pfamName})`; // Create the y-axis label
+                const curYLabel = pfamYLabel || fileYLabel;
 
-                // Add the binding site trace
-                bindingSiteTraces.push({
-                    x: [start, end],
-                    y: [yLabel, yLabel], // Use categorical label directly
-                    mode: 'lines',
-                    line: {
-                        color: color,
-                        width: 10
-                    },
-                    name: yLabel,
-                    legendgroup: yLabel,
-                    hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`, // Tooltip
-                    showlegend: false // Show the legend only for the first trace of a file/sequence
-                });
-                // x values are all the integers from start to end
-                const xs = [
-                    ...(Number.isInteger(start) ? [] : [start]),
-                    ...Array.from({ length: Math.floor(end) - Math.ceil(start) + 1 },(_, i) => Math.ceil(start) + i),
-                    ...(Number.isInteger(end) ? [] : [end])
-                ];
-                bindingSiteTraces.push({
-                    x: xs,
-                    y: Array(xs.length).fill(yLabel),
-                    mode: "markers",
-                    marker: {
-                        color: color,
-                        size: 15,
-                        opacity: 0   // fully invisible
-                    },
-                    hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`,
-                    showlegend: false
-                });
+                if (!yLabels.includes(curYLabel)) {
+                    yLabels.push(curYLabel); // Add label to y-axis categories
+                }
 
-                const gaps = plotData.gaps[fileName][seqName];
-                gaps.forEach(gap => {
-                    const [gapStart, gapEnd] = gap;
+                bindingSites.forEach(range => {
+                    const [start, end, seq, bsStart, bsEnd, isAdded] = range;
+                    const color = isAdded ? `rgba(${hexToRGB(colorPalette[(seqsNum - 1 - seqIndex) % colorPalette.length])}, 0.5)` : 'rgba(211, 211, 211, 0.5)';
+
+                    // Add the binding site trace
                     bindingSiteTraces.push({
-                        x: [gapStart - 0.25, gapEnd + 0.25],
-                        y: [yLabel, yLabel],
+                        x: [start, end],
+                        y: [curYLabel, curYLabel], // Use categorical label directly
                         mode: 'lines',
-                        line: {
-                            color: 'rgba(0, 0, 0, 0.5)', // Black color for gaps with transparency
-                            width: 6
-                        },
+                        line: {color: color, width: 10},
+                        name: curYLabel,
+                        legendgroup: curYLabel,
+                        hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`, // Tooltip
                         showlegend: false,
-                        // hoverinfo: 'skip',  // disable hover for gaps
-                        hovertemplate: `deletion (${gapStart}-${gapEnd})<extra></extra>`,
+                        pfam: pfamYLabel,
+                        file: fileYLabel,
+                        pfamName: pfamName,
                     });
-                });
-
-                const insertions = plotData.insertions[fileName][seqName];
-                insertions.forEach(insertion => {
-                    // add annotation for insertion
-                    const [pos, ins] = insertion;
+                    // x values are all the integers from start to end
+                    const xs = [
+                        ...(Number.isInteger(start) ? [] : [start]),
+                        ...Array.from({ length: Math.floor(end) - Math.ceil(start) + 1 },(_, i) => Math.ceil(start) + i),
+                        ...(Number.isInteger(end) ? [] : [end])
+                    ];
                     bindingSiteTraces.push({
-                        x: [pos],
-                        y: [yLabel],
-                        mode: 'markers',
-                        marker: {
-                            symbol: 'triangle-up',
-                            size: 10,
-                            color: 'rgba(0, 0, 0, 0.5)',
-                        },
+                        x: xs,
+                        y: Array(xs.length).fill(curYLabel),
+                        mode: "markers",
+                        marker: {color: color, size: 15, opacity: 0},  // fully invisible
+                        hovertemplate: `${seq} (${bsStart}-${bsEnd})<extra></extra>`,
                         showlegend: false,
-                        hovertemplate: `${ins} insertion<extra></extra>`,
+                        pfam: pfamYLabel,
+                        file: fileYLabel,
+                    });
+
+                    const gaps = plotData.gaps[fileName][seqName];
+                    gaps.forEach(gap => {
+                        const [gapStart, gapEnd] = gap;
+                        bindingSiteTraces.push({
+                            x: [gapStart - 0.25, gapEnd + 0.25],
+                            y: [curYLabel, curYLabel],
+                            mode: 'lines',
+                            line: {color: 'rgba(0, 0, 0, 0.5)', width: 6},  // Black color for gaps with transparency
+                            showlegend: false,
+                            // hoverinfo: 'skip',  // disable hover for gaps
+                            hovertemplate: `deletion (${gapStart}-${gapEnd})<extra></extra>`,
+                            pfam: pfamYLabel,
+                            file: fileYLabel,
+                        });
+                    });
+                    const insertions = plotData.insertions[fileName][seqName];
+                    insertions.forEach(insertion => {
+                        // add annotation for insertion
+                        const [pos, ins] = insertion;
+                        bindingSiteTraces.push({
+                            x: [pos],
+                            y: [curYLabel],
+                            mode: 'markers',
+                            marker: {symbol: 'triangle-up', size: 10, color: 'rgba(0, 0, 0, 0.5)',},
+                            showlegend: false,
+                            hovertemplate: `${ins} insertion<extra></extra>`,
+                            pfam: pfamYLabel,
+                            file: fileYLabel,
+                        });
                     });
                 });
             });
-        });
+        }
     });
 
     return [bindingSiteTraces, yLabels];
 }
+
 
 // Helper function to convert a hex color to RGB
 function hexToRGB(hex) {

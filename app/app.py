@@ -172,6 +172,31 @@ def get_score_files(request):
         return score_files
 
 
+def get_score_file_ids(request):
+    """
+    Returns two lists: list of file IDs and list of file names (for files that were not found).
+    """
+    if 'score' in request.files and request.files.getlist('score')[0].filename:
+        if current_user.is_authenticated:
+            file_ids, file_names = [], []
+            for score_file in request.files.getlist('score'):
+                file = files.get_file_by_name(score_file.filename, files.FileType.SCORE, is_public=False)
+                if file:
+                    file_ids.append(file.id)
+                else:
+                    file_names.append(score_file.filename)
+            return file_ids, file_names
+        return [], [score_file.filename for score_file in request.files.getlist('score')]
+    return [int(request.form[var]) for var in request.form if var.startswith('score_')], []
+
+
+def get_pfam_map_by_request(request):
+    file_ids, file_names = get_score_file_ids(request)
+    pfam_map = get_pfam_map(file_ids)
+    pfam_map.update({name: name for name in file_names})
+    return pfam_map
+
+
 def load_user_identifiers(force=False):
     if not current_user.is_authenticated:
         return {}
@@ -356,6 +381,8 @@ def find_binding_sites():
                 del identified_scores[file], identified_binding_sites[file], gaps[file], max_scores[file]
         binding_sites = {k: v for k, v in binding_sites.items() if v}
 
+    pfam_map = get_pfam_map(identified_unq_file_ids)
+
     plot_data = {
         'ref_name': ref_name,
         'sequence_strs': sequences,
@@ -368,6 +395,7 @@ def find_binding_sites():
         'insertions': insertions,
         'gaps': gaps,
         'threshold': selected_threshold,
+        'pfam_map': pfam_map,
     }
 
     print(plot_data)  # TODO: remove
@@ -445,6 +473,8 @@ def find_significant_mutations():
                 for i in reversed(indices_to_remove):
                     del curr_binding_sites[name][i]
 
+    pfam_map = get_pfam_map_by_request(request)
+
     plot_data = {
         'ref_name': ref_name,
         'sequence_strs': sequences,
@@ -459,6 +489,7 @@ def find_significant_mutations():
         'mutants_effect': mutants_effect,
         'ref_effect': ref_effect,
         'threshold': selected_threshold,
+        'pfam_map': pfam_map,
     }
 
     return Response(
@@ -521,11 +552,13 @@ def upload_files_():
         'threshold': selected_threshold,
     }
     if should_show_binding_sites:
+        pfam_map = get_pfam_map_by_request(request)
         plot_data.update({
             'highest_values': highest_values,
             'binding_sites': binding_sites,
             'gaps': gaps,
-            'insertions': insertions
+            'insertions': insertions,
+            'pfam_map': pfam_map,
         })
 
     return jsonify(plot_data)
