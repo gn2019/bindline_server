@@ -116,6 +116,13 @@ def update_mats(file):
     load_user_identifiers(force=True)
 
 
+def update_file_pfams(stored_files, pfam_ids):
+    if isinstance(stored_files, files.File):
+        stored_files = (stored_files,)
+    for file in stored_files:
+        files.update_file_pfams(file, pfam_ids)
+
+
 @app.route("/download/sample-score")
 def download_sample_score():
     return send_from_directory(os.path.join(app.root_path, 'static', 'samples'), 'score.tsv')
@@ -146,6 +153,10 @@ def upload_and_update_db(file, file_type):
         return file_metadata
 
 
+def get_pfam_ids(request):
+    return [int(request.form[var]) for var in request.form if var.startswith('pfam_') and request.form[var].isdigit()]
+
+
 def get_score_files(request):
     if 'score' in request.files and request.files.getlist('score')[0].filename:
         # save them (it's a list of files)
@@ -157,6 +168,7 @@ def get_score_files(request):
                 if not file:
                     return jsonify({'error': f'Failed to upload score file {score_file.filename}.'}), 500
                 stored_files.append(file)
+            update_file_pfams(stored_files, get_pfam_ids(request))
             # take their names
             return [(file.filename, get_file_path(file)) for file in stored_files]
         else:
@@ -165,10 +177,10 @@ def get_score_files(request):
     else:
         score_files = []
         for var in request.form:
-            if var.startswith('score_'):
+            if var.startswith('score_') and request.form[var].isdigit():
                 file_id = int(request.form[var])
                 file = files.get_file_by_id(file_id)
-                score_files.append((file.filename, get_file_path(file)),)
+                score_files.append((file.filename, get_file_path(file)), )
         return score_files
 
 
@@ -240,6 +252,8 @@ def list_files_(file_type):
         return jsonify(list_user_public_fasta_file_names())
     elif file_type == consts.SCORE:
         return jsonify(list_user_public_score_file_jsons())
+    elif file_type == 'pfam':
+        return jsonify(list_pfam_jsons())
     else:
         return jsonify({"error": "Invalid file type"}), 400
 

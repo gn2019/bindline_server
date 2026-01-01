@@ -67,6 +67,12 @@ class Pfam(db.Model):
         back_populates="pfams",
     )
 
+    def to_json(self):
+        return {
+            'id': self.id,
+            'name': self.name
+        }
+
 
 def init_db(app):
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'

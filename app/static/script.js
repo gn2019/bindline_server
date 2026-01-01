@@ -39,6 +39,26 @@ function loadExistingFiles() {
                 fastaDropdown.append(new Option(file, file, false, false));
             });
         });
+
+    fetch('/list-files/pfam')
+        .then(response => response.json())
+        .then(pfams => {
+            const pfamDropdown = $('#pfam-select'); // Use jQuery selector for Select2
+            pfamDropdown.empty(); // Clear previous options
+
+            console.log(pfams);
+            // Populate options
+            for (const pfam of pfams) {
+                pfamDropdown.append(new Option(pfam.name, pfam.id, false, false));
+            }
+
+            // Initialize Select2 for searchable dropdown
+            pfamDropdown.select2({
+                placeholder: "Select Protein Families",
+                allowClear: true,
+                dropdownPosition: "below",
+            });
+        });
 }
 
 function showScoreFile(file) {
@@ -311,6 +331,7 @@ function appendSequencesAndOptions(formData, selectedSequences, refName) {
 
     appendThresholds(formData);
     appendScoreFiles(formData);
+    appendPfams(formData);
 }
 
 /** Append thresholds to formData */
@@ -362,6 +383,18 @@ function appendScoreFiles(formData) {
     }
     throw new Error('Select protein files, upload files, or search across all proteins.');
 }
+
+
+function appendPfams(formData) {
+    // get the active tab name in score_source
+    const scoreSource = getActiveTab('score-tabs');
+    if (scoreSource === 'score-upload') {
+        const selectedPfams = Array.from(document.getElementById('pfam-select').selectedOptions).map(option => option.value);
+        // add list of the pfams to formData
+        selectedPfams.forEach((pfam, index) => formData.append(`pfam_${index}`, pfam));
+    }
+}
+
 
 /** Validate preconditions and alert user if conditions are not met */
 function validateConditions(formData, selectedSequences) {

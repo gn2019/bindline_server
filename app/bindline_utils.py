@@ -21,6 +21,10 @@ def list_user_public_fasta_file_names():
     return sum(map(lambda fs: [f.filename for f in fs], files.list_user_public_fasta_files()), [])
 
 
+def list_pfam_jsons():
+    return [p.to_json() for p in files.list_pfams()]
+
+
 def get_insertion_fractions(num_of_fractions, base_index):
     return [base_index + (i + 1) / (num_of_fractions + 1) for i in range(num_of_fractions)]
 

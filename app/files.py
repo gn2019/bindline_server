@@ -163,3 +163,13 @@ def get_pfam_ids(file_id):
 def get_pfam_name(pfam_id):
     pfam = Pfam.query.filter_by(id=pfam_id).first()
     return pfam.name if pfam else None
+
+
+def list_pfams():
+    return Pfam.query.order_by(Pfam.name).all()
+
+
+def update_file_pfams(file, pfam_ids):
+    pfams = Pfam.query.filter(Pfam.id.in_(pfam_ids)).all()
+    file.pfams = pfams
+    db.session.commit()
