@@ -154,6 +154,67 @@ class TFIdentifier:
             out[name] = (seq, self.__identify_one(seq, summarize=summarize))
         return out
 
+
+    def update_many(self, tf_tables: (int, 'bindline.EScoreTable'), should_update_ranks: bool = False, should_save: bool = True):
+        """
+        Update/add multiple TF IDs with new tables
+        """
+        ids_to_remove = []
+        temp_abs_mat = {}
+        temp_rank_mat = {}
+        temp_abs_ids = {}
+        temp_rank_ids = {}
+        for tf_id, table in tf_tables:
+            ids_to_remove.append(tf_id)
+            k = table.mer
+            if k not in temp_abs_mat:
+                temp_abs_mat[k] = []
+                temp_abs_ids[k] = []
+            if should_update_ranks and k not in temp_rank_mat:
+                temp_rank_mat[k] = []
+                temp_rank_ids[k] = []
+
+            abs_vector = table.vectorize()
+            temp_abs_mat[k].append(abs_vector)
+            temp_abs_ids[k].append(tf_id)
+            # Update rank matrix
+            if should_update_ranks:
+                rank_vector = np.argsort(np.argsort(abs_vector))
+                temp_rank_mat[k].append(rank_vector)
+                temp_rank_ids[k].append(tf_id)
+
+        # First remove all TF IDs
+        self.remove_many(ids_to_remove, should_update_ranks, should_save)
+        # Then add all TF IDs
+        for k in temp_abs_mat:
+            if k not in self.kmers:
+                self.kmers.add(k)
+                self.abs_mat[k] = np.empty((0, 4 ** k), dtype=np.float32)
+                self.abs_ids[k] = np.empty((0,), dtype=np.int32)
+                if should_update_ranks:
+                    self.rank_mat[k] = np.empty((0, 4 ** k), dtype=np.float32)
+                    self.rank_ids[k] = np.empty((0,), dtype=np.int32)
+
+            abs_vectors = np.vstack(temp_abs_mat[k])
+            abs_ids = np.array(temp_abs_ids[k], dtype=np.int32)
+            self.abs_mat[k] = np.vstack([self.abs_mat.get(k, np.empty((0, abs_vectors.shape[1]))), abs_vectors])
+            self.abs_ids[k] = np.append(self.abs_ids.get(k, []), abs_ids)
+            if should_save:
+                os.makedirs(self._abs_folder, exist_ok=True)
+                np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+                np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+
+            if should_update_ranks:
+                rank_vectors = np.vstack(temp_rank_mat[k])
+                rank_ids = np.array(temp_rank_ids[k], dtype=np.int32)
+                self.rank_mat[k] = np.vstack([self.rank_mat.get(k, np.empty((0, rank_vectors.shape[1]))), rank_vectors])
+                self.rank_ids[k] = np.append(self.rank_ids.get(k, []), rank_ids)
+                if should_save:
+                    os.makedirs(self._ranks_folder, exist_ok=True)
+                    np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                    np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+
+
     def update(self, tf_id: int, table: 'bindline.EScoreTable', should_update_ranks: bool = False, should_save: bool = True):
         """
         Update/add a TF ID with a new table
@@ -188,7 +249,16 @@ class TFIdentifier:
                 np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
                 np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
-    def remove(self, tf_id: str, should_update_ranks: bool = False, should_save: bool = True):
+
+    def remove_many(self, tf_ids: list, should_update_ranks: bool = False, should_save: bool = True):
+        """
+        Remove multiple TF IDs from all k-mer matrices
+        """
+        for tf_id in tf_ids:
+            self.remove(tf_id, should_update_ranks, should_save)
+
+
+    def remove(self, tf_id: int, should_update_ranks: bool = False, should_save: bool = True):
         """
         Remove a TF ID from all k-mer matrices
         """
@@ -220,6 +290,22 @@ class TFIdentifier:
                     else:
                         np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
                         np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+
+    def save(self, should_save_ranks: bool = False):
+        """
+        Save all matrices to disk
+        """
+        os.makedirs(self._abs_folder, exist_ok=True)
+        for k in self.kmers:
+            if k in self.abs_mat:
+                np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+                np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+        if should_save_ranks:
+            os.makedirs(self._ranks_folder, exist_ok=True)
+            for k in self.kmers:
+                if k in self.rank_mat:
+                    np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                    np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
     def copy(self):
         """
