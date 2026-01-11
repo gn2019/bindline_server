@@ -14,6 +14,8 @@ from . import auth
 from . import bindline
 from . import consts
 from . import files
+from . import export
+from .consts import cfg
 from .database_setup import db, User
 from .auth import auth_bp  # Import the authentication blueprint
 from .files import files_bp  # Import the files blueprint
@@ -30,8 +32,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.abspath(os.path.joi
 app.config['SECRET_KEY'] = 'GAIAEJKC@#QJTKKZ MEK J$KJFSZ WEFSFWAfewa'
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-with open("config.json") as f:
-    cfg = json.load(f)
 context.load_cert_chain(cfg["ssl_cert"], cfg["ssl_key"])
 
 db.init_app(app)
@@ -368,14 +368,46 @@ def find_binding_sites():
         'insertions': insertions,
         'gaps': gaps,
         'threshold': selected_threshold,
+        'export_url': None,
     }
 
     print(plot_data)  # TODO: remove
+    plot_data['export_url'] = export.export_data(plot_data, get_query_data(request))
 
     return Response(
         json.dumps(plot_data, allow_nan=False),
         mimetype='application/json'
     )
+
+
+def get_query_data(request):
+    search_binding_sites = request.form.get('search_binding_sites') == 'true'
+    selected_threshold, ranks_threshold = get_thresholds(request)
+    query_data = {
+        'file_type': request.form.get('file_type'),
+        'sequences': json.loads(request.form.get('sequences')),
+        'ref_name': request.form.get('ref_name'),
+        'selected_threshold': selected_threshold,
+        'ranks_threshold': ranks_threshold,
+        'show_diff_only': request.form.get('show_diff_only') == 'true',
+        'search_significant_mutations': request.form.get('search_significant_mutations') == 'true',
+        'search_binding_sites': search_binding_sites,
+    }
+
+    if search_binding_sites:
+        query_data['score_source'] = 'search'
+    elif 'score' in request.files and request.files.getlist('score')[0].filename:
+        query_data['score_source'] = 'upload'
+    else:
+        query_data['score_source'] = 'existing'
+        query_data['score_file_ids'] = [request.form[var] for var in request.form if var.startswith('score_')]
+
+    return query_data
+
+# download the zip file
+@app.route('/results/<dir_name>/<file_name>', methods=['GET'])
+def download_results(dir_name, file_name):
+    return send_from_directory(os.path.join(consts.RESULTS_DIR, dir_name), file_name)
 
 
 def find_significant_mutations():
@@ -459,7 +491,9 @@ def find_significant_mutations():
         'mutants_effect': mutants_effect,
         'ref_effect': ref_effect,
         'threshold': selected_threshold,
+        'export_url': None,
     }
+    plot_data['export_url'] = export.export_data(plot_data, get_query_data(request))
 
     return Response(
         json.dumps(plot_data, allow_nan=False),
@@ -519,6 +553,7 @@ def upload_files_():
         'aligned_positions': aligned_positions,
         'max_scores': max_scores,
         'threshold': selected_threshold,
+        'export_url': None,
     }
     if should_show_binding_sites:
         plot_data.update({
@@ -527,6 +562,7 @@ def upload_files_():
             'gaps': gaps,
             'insertions': insertions
         })
+    plot_data['export_url'] = export.export_data(plot_data, get_query_data(request))
 
     return jsonify(plot_data)
 

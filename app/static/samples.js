@@ -14,21 +14,28 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
-async function waitForOption(selectBox, value, interval = 50) {
+async function waitForOption(selectBox, value, byId=false, interval=50) {
     while (true) {
-        if (selectBox && [...selectBox.options].some(o => o.text === value)) {
+        if (selectBox && [...selectBox.options].some(o => (byId ? o.value : o.text) == value)) {
             return;
         }
         await new Promise(resolve => setTimeout(resolve, interval));
     }
 }
 
+function clearSelect2Box(elementId) {
+    const selectBox = document.getElementById(elementId);
+    for (const option of selectBox.options) {
+        option.selected = false;
+    }
+    $(selectBox).trigger('change');
+}
 
-async function setSelect2BoxValue(elementId, choices) {
+async function setSelect2BoxValue(elementId, choices, byId=false) {
     const selectBox = document.getElementById(elementId);
     for (const choice of choices) {
-        await waitForOption(selectBox, choice).then(() => {
-            const option = [...selectBox.options].find(o => o.text === choice);
+        await waitForOption(selectBox, choice, byId).then(() => {
+            const option = [...selectBox.options].find(o => (byId ? o.value : o.text) == choice);
             option.selected = true;
         });
     }
@@ -62,6 +69,7 @@ function setNumberValue(elementId, number) {
 
 
 function setSequences(sequences) {
+    removeAllSequenceRows();
     for (const [name, value] of Object.entries(sequences)) {
         addSequenceRow(name, value);
     }
@@ -73,12 +81,16 @@ function pressButton(elementId) {
     button.click();
 }
 
+function unsetExistingScore() {
+    clearSelect2Box('existing_score');
+}
 
-async function setExistingScore(choices) {
+
+async function setExistingScore(choices, byId=false) {
     if (!Array.isArray(choices)) {
         choices = [choices];
     }
-    await setSelect2BoxValue('existing_score', choices);
+    await setSelect2BoxValue('existing_score', choices, byId);
 }
 
 
@@ -86,37 +98,126 @@ function send() {
     pressButton('upload-and-plot');
 }
 
+function setUploadScoreFile() {
+    pressButton('score-upload-nav');
+}
+
+function setExistingScoreFile() {
+    pressButton('score-existing-nav');
+}
 
 function setSearchBindingSites() {
     pressButton('score-search-nav');
 }
 
-
-function setSearchSignificatMutations() {
-    setCheckboxValue('search-significant-mutations');
+function setSearchSignificatMutations(isChecked=true) {
+    setCheckboxValue('search-significant-mutations', isChecked=isChecked);
 }
 
-
-function setShowDiffOnly() {
-    setCheckboxValue('show-diff-only');
+function setShowDiffOnly(isChecked=true) {
+    setCheckboxValue('show-diff-only', isChecked=isChecked);
 }
 
+function setFiletype(scoreType) {
+    setRadioValue('file_type', scoreType);
+}
 
 function setScoreThreshold(scoreType, value) {
-    setRadioValue('file_type', scoreType);
+    setFiletype(scoreType);
     setCheckboxValue(`enable_${scoreType}_threshold`);
     setNumberValue(`${scoreType}_threshold_input`, value);
 }
-
 
 function setRankThreshold(value) {
     setCheckboxValue('enable_ranks_threshold');
     setNumberValue('ranks_threshold_input', value);
 }
 
+function setStackedView() {
+    setRadioValue('view-option', 'stacked');
+}
 
 function setTabbedView() {
     setRadioValue('view-option', 'tabbed');
+}
+
+function setRef(refName) {
+    const row = getRowBySequenceName(refName);
+    if (row) {
+        setAsRef(row);
+    }
+}
+
+function unsetThresholds() {
+    setCheckboxValue('enable_escore_threshold', false);
+    setCheckboxValue('enable_zscore_threshold', false);
+    setCheckboxValue('enable_iscore_threshold', false);
+    setCheckboxValue('enable_ranks_threshold', false);
+}
+
+function resetForm() {
+    setScoreSource('existing');
+    unsetExistingScore();
+    setSequences({});
+    setFiletype('escore');
+    unsetThresholds();
+    setShowDiffOnly(false);
+    setSearchSignificatMutations(false);
+    setStackedView();
+}
+
+function setScoreSource(scoreSource) {
+    switch (scoreSource) {
+        case 'search':
+            setSearchBindingSites();
+            break;
+        case 'upload':
+            setUploadScoreFile();
+            break;
+        case 'existing':
+        default:
+            setExistingScoreFile();
+            break;
+    }
+}
+
+function hideDownloadButton() {
+    const exportDiv = document.getElementById('export-div');
+    if (exportDiv) {
+        exportDiv.classList.add('d-none');
+    }
+}
+
+function importQueryData(queryData) {
+    resetForm();
+    hideDownloadButton();
+    if (queryData.score_source != null) {
+        setScoreSource(queryData.score_source);
+    }
+    if (queryData.score_file_ids) {
+        setExistingScore(queryData.score_file_ids, true);
+    }
+    if (queryData.file_type != null) {
+        setFiletype(queryData.file_type);
+    }
+    if (queryData.selected_threshold != null) {
+        setScoreThreshold(queryData.file_type, queryData.selected_threshold);
+    }
+    if (queryData.ranks_threshold != null) {
+        setRankThreshold(queryData.ranks_threshold);
+    }
+    if (queryData.show_diff_only) {
+        setShowDiffOnly();
+    }
+    if (queryData.search_significant_mutations) {
+        setSearchSignificatMutations();
+    }
+    if (queryData.sequences != null) {
+        setSequences(queryData.sequences);
+    }
+    if (queryData.ref_name != null) {
+        setRef(queryData.ref_name);
+    }
 }
 
 
