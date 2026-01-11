@@ -698,7 +698,7 @@ function createTraces(plotData) {
     const sequencesWithLines = [];
     const sequencesWithMultipleLines = [];
     Object.keys(plotData.aligned_seqs).forEach((seqName) => {
-        const numLines = traces.filter(trace => trace.sequence === seqName && !trace.isMetaSequence).length;
+        const numLines = traces.filter(trace => trace.name && trace.sequence === seqName && !trace.isMetaSequence).length;
         if (numLines > 0) {
             sequencesWithLines.push(seqName);
             if (numLines > 1) {
