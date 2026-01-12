@@ -448,7 +448,7 @@ async function handlePlotData(plotData) {
             traceFunc: createTraces,
             layoutFunc: getBindlinePlotLayout,
             callbackFunc: (component) => {
-                handleLegendClick(component.div);
+                isolateOnLegendClick(component.div);
                 highlightSequenceOnHover(component.div);
             }
         },
@@ -458,7 +458,7 @@ async function handlePlotData(plotData) {
             traceFunc: createBindingSiteTraces,
             layoutFunc: getBindingSitesPlotLayout,
             callbackFunc: (component) => {
-                handleClick(component.div);
+                aggPfamOnClick(component.div);
             }
         },
         allMutants: {
@@ -551,46 +551,101 @@ function addDownloadButton(exportUrl) {
 }
 
 
-function handleClick(plotDiv) {
+function aggPfamOnClick(plotDiv) {
     plotDiv.on('plotly_click', (e) => {
-        const trace = plotDiv.data[e.points[0].curveNumber];
-        if (!trace.pfam) {
-            return;
-        }
+        const clicked = plotDiv.data[e.points[0].curveNumber];
+        if (!clicked?.pfam) return;
+
+        const traceIndices = [];
+        const yUpdates = [];
+        const nameUpdates = [];
+        const legendUpdates = [];
+
         plotDiv.data.forEach((t, i) => {
-            if (t.pfam === trace.pfam) {
-                const changeTo = (t.y[0] === t.pfam ? t.file : t.pfam);
-                Plotly.restyle(plotDiv, {
-                    y: [Array(t.x.length).fill(changeTo)],
-                    name: [t.name ? changeTo : undefined],
-                    legendgroup: [t.legendgroup ? changeTo : undefined],
-                }, [i]);
-            }
-        });
-        const byPfams = new Map();
-        plotDiv.data.forEach(t => {
-            if (isVisible(t) && t.name) {
-                if (!byPfams.has(t.pfamName)) {
-                    byPfams.set(t.pfamName, {"pfamTraces": new Set(), "fileTraces": new Set()});
-                }
-                const placeToAdd = t.pfam === t.name ? "pfamTraces" : "fileTraces";
-                byPfams.get(t.pfamName)[placeToAdd].add(t.name);
-            }
+            if (t.pfam !== clicked.pfam) return;
+
+            const newY = (t.y[0] === t.pfam) ? t.file : t.pfam;
+
+            traceIndices.push(i);
+            yUpdates.push(Array(t.x.length).fill(newY));
+
+            // match original semantics exactly
+            nameUpdates.push(t.name ? newY : undefined);
+            legendUpdates.push(t.legendgroup ? newY : undefined);
         });
 
-        const yLabels = [];
-        for (const pfamTraces of byPfams.values()) {
-            yLabels.push(
-                ...Array.from(pfamTraces.fileTraces),
-                ...Array.from(pfamTraces.pfamTraces),
-            );
-        }
-        Plotly.relayout(plotDiv, getBindingSitesPlotLayout(yLabels));
+        if (!traceIndices.length) return;
+
+        Plotly.restyle(plotDiv, {
+            y: yUpdates,
+            name: nameUpdates,
+            legendgroup: legendUpdates,
+        }, traceIndices);
+
+        relayoutBindingSitesPlot(plotDiv);
     });
 }
 
 
-function handleLegendClick(plotDiv) {
+function relayoutBindingSitesPlot(plotDiv) {
+    const byPfams = new Map();
+    plotDiv.data.forEach(t => {
+        if (isVisible(t) && t.name) {
+            if (!byPfams.has(t.pfamName)) {
+                byPfams.set(t.pfamName, {"pfamTraces": new Set(), "fileTraces": new Set()});
+            }
+            const placeToAdd = t.pfam === t.name ? "pfamTraces" : "fileTraces";
+            byPfams.get(t.pfamName)[placeToAdd].add(t.name);
+        }
+    });
+
+    const yLabels = [];
+    for (const pfamTraces of byPfams.values()) {
+        yLabels.push(
+            ...Array.from(pfamTraces.fileTraces),
+            ...Array.from(pfamTraces.pfamTraces),
+        );
+    }
+    Plotly.relayout(plotDiv, getBindingSitesPlotLayout(yLabels));
+}
+
+
+function aggPfams() {
+    const shouldAggPfams = arePfamsAggregated();
+    const plotDiv = document.getElementById('binding-sites-plot');
+
+    const traceIndices = [];
+    const yUpdates = [];
+    const nameUpdates = [];
+    const legendUpdates = [];
+
+    plotDiv.data.forEach((t, i) => {
+        if (!t.pfam) return;
+
+        const nowOnPfam = t.y[0] === t.pfam;
+        if (nowOnPfam === shouldAggPfams) return;
+
+        const newY = shouldAggPfams ? t.pfam : t.file;
+
+        traceIndices.push(i);
+        yUpdates.push(Array(t.x.length).fill(newY));
+        nameUpdates.push(t.name ? newY : undefined);
+        legendUpdates.push(t.legendgroup ? newY : undefined);
+    });
+
+    if (!traceIndices.length) return;
+
+    Plotly.restyle(plotDiv, {
+        y: yUpdates,
+        name: nameUpdates,
+        legendgroup: legendUpdates,
+    }, traceIndices);
+
+    relayoutBindingSitesPlot(plotDiv);
+}
+
+
+function isolateOnLegendClick(plotDiv) {
     plotDiv.on('plotly_legendclick', (e) => {
         const trace = plotDiv.data[e.curveNumber];
 
@@ -859,7 +914,7 @@ function createTraces(plotData) {
 }
 
 
-function shouldAggPfams(pfamMap, numSequences) {
+function shouldShowByPfams(pfamMap, numSequences) {
     // We want aggregation in 2 cases:
     // 1. >1 pfams, >1 files, >1 per pfam
     // 2. >1 seqs, 1 pfam, >1 files, >1 per pfam
@@ -877,11 +932,12 @@ function createBindingSiteTraces(plotData) {
     const colorPalettes = getColorPalettes(); // Get color palettes for consistent coloring
     const yLabels = []; // Store unique y-axis labels
 
-    if (!shouldAggPfams(plotData.pfam_map, Object.keys(plotData.sequence_strs).length)) {
+    if (!shouldShowByPfams(plotData.pfam_map, Object.keys(plotData.sequence_strs).length)) {
         plotData.pfam_map = new Map();
         Object.keys(plotData.binding_sites).forEach(fileName => {
             plotData.pfam_map[fileName] = [fileName];
         });
+        document.querySelector('#toggle-agg-pfam-div').classList.remove('show-with-plot');
     }
 
     const pfamNum = Object.keys(plotData.pfam_map).length;
@@ -1436,13 +1492,13 @@ function showCookiesNotice() {
 
 
 function animateAllMutants() {
-    isCenteredOnWT = !isCenteredOnWT;
+    const shouldCenterOnWT = isCenteredOnWT();
     const plot = document.getElementById('all-mutants-plot');
 
     const newY = plot.data.map(trace => {
         if (trace.delta === undefined) return trace.y;
 
-        const ref = isCenteredOnWT ? trace.wt : 0;
+        const ref = shouldCenterOnWT ? trace.wt : 0;
         if (trace.mode === "lines") {
             return [ref, ref + trace.delta];
         } else {  // markers
@@ -1468,10 +1524,10 @@ function animateAllMutants() {
 
     // show to WT curve if centerOnWT
     const wtIndex = plot.data.findIndex(trace => trace.isWT);
-    Plotly.restyle(plot, {visible: isCenteredOnWT ? true : 'legendonly'}, [wtIndex]);
+    Plotly.restyle(plot, {visible: shouldCenterOnWT ? true : 'legendonly'}, [wtIndex]);
     // change y axis label
     Plotly.relayout(plot, {
-        'yaxis.title.text': isCenteredOnWT ? 'Score' : 'Effect (ΔScore)'
+        'yaxis.title.text': shouldCenterOnWT ? 'Score' : 'Effect (ΔScore)'
     });
 }
 
@@ -1537,8 +1593,18 @@ function importLocalFile() {
 }
 
 
-let isCenteredOnWT = false;
+function isCenteredOnWT() {
+    return document.getElementById('toggle-wt-center').checked;
+}
+
+
+function arePfamsAggregated() {
+    return document.getElementById('toggle-agg-pfam').checked;
+}
+
+
 document.getElementById('toggle-wt-center').addEventListener('change', animateAllMutants);
+document.getElementById('toggle-agg-pfam').addEventListener('change', aggPfams);
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', loadSequences);

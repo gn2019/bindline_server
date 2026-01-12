@@ -273,6 +273,10 @@ Link is valid for 24 hours."></div>
                    <a href='{{ url_for('help_page') }}#plots' target='_blank'>Help Page</a>.">
                     <i class="fas fa-info-circle"></i>
                 </a>
+                <div id="toggle-agg-pfam-div" class="form-check form-switch d-none mt-2 ms-5 z-1 fs-6 position-absolute show-with-plot">
+                  <input class="form-check-input" type="checkbox" id="toggle-agg-pfam" checked>
+                  <label class="form-check-label" for="toggle-agg-pfam">Aggregate Protein Families</label>
+                </div>
 
                 <div id="binding-sites-plot"></div>
                 <div id="binding-sites-plot-loading" class="loading-spinner"></div>
