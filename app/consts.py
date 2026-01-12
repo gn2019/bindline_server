@@ -1,7 +1,12 @@
+import json
 import os.path
 
+with open("config.json") as f:
+    cfg = json.load(f)
 
-UPLOAD_DIR = os.path.join('data', 'uploads')
+DATA_DIR = cfg.get('data_dir', 'data')
+UPLOAD_DIR = os.path.join(DATA_DIR, 'uploads')
+RESULTS_DIR = os.path.join(DATA_DIR, 'results')
 PUBLIC_DIR = 'public'
 IDENTIFIERS_DIR = 'identifiers'
 UPDATES_DIR = os.path.join(UPLOAD_DIR, 'updates')

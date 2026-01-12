@@ -248,6 +248,21 @@ function createActionsTd(row) {
     return cell;
 }
 
+function getRowBySequenceName(name) {
+    for (let row of getSequenceRows()) {
+        const rowName = row.cells[1].querySelector('input').value;
+        if (rowName === name) {
+            return row;
+        }
+    }
+    return null;
+}
+
+function removeAllSequenceRows() {
+    const sequenceTbody = document.getElementById('sequence-tbody');
+    sequenceTbody.innerHTML = '';
+}
+
 // Add a new row to the table with optional name and sequence values
 function addSequenceRow(name = '', sequence = '') {
     const row = document.createElement('tr');
@@ -510,10 +525,29 @@ async function handlePlotData(plotData) {
     // Run all plots asynchronously without blocking UI updates
     Object.values(plotComponents).forEach(plotComponent);
 
+    addDownloadButton(plotData.export_url);
+
     // Since plotting is now separate, syncing should run after a slight delay
     setTimeout(() => {
         syncPlots(Object.values(plotComponents).map(component => component.div));
     }, 500);
+}
+
+
+function addDownloadButton(exportUrl) {
+    if (!exportUrl) {
+        return;
+    }
+    // write export path as a title
+    const exportPathDiv = document.getElementById('export-div');
+    // make a clickable link to the export path
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.target = "_blank";
+    link.className = "data-btn";
+    link.innerHTML = '<i class="fa fa-download"></i> Download Data';
+    exportPathDiv.replaceChildren(link);
+    exportPathDiv.classList.remove('d-none');
 }
 
 
@@ -1441,6 +1475,68 @@ function animateAllMutants() {
     });
 }
 
+
+function importLocalFile() {
+    // open file dialog
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.zip,.json'; // Acceptable file types
+    fileInput.click();
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        // if json file (by suffix), handlePlotData(content)
+        if (file.name.endsWith('.json')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const plotData = JSON.parse(content);
+                    handlePlotData(plotData);
+                } catch (error) {
+                    handleError(new Error('Failed to parse JSON file.'));
+                }
+            };
+            reader.readAsText(file);
+        }
+        // if zip file, handlePlotData(content of data.json)
+        else if (file.name.endsWith('.zip')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const arrayBuffer = e.target.result;
+                JSZip.loadAsync(arrayBuffer).then(function(zip) {
+                    return zip.file("query.json").async("string");
+                }).then(function(content) {
+                    try {
+                        const queryData = JSON.parse(content);
+                        importQueryData(queryData);
+                    } catch (error) {
+                        handleError(new Error('Failed to parse JSON from ZIP file.'));
+                    }
+                }).catch(function() {
+                    handleError(new Error('Failed to read query.json from ZIP file.'));
+                });
+                JSZip.loadAsync(arrayBuffer).then(function(zip) {
+                    return zip.file("data.json").async("string");
+                }).then(function(content) {
+                    try {
+                        const plotData = JSON.parse(content);
+                        handlePlotData(plotData);
+                    } catch (error) {
+                        handleError(new Error('Failed to parse JSON from ZIP file.'));
+                    }
+                }).catch(function() {
+                    handleError(new Error('Failed to read data.json from ZIP file.'));
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            handleError(new Error('Unsupported file type. Please upload a .json or .zip file.'));
+        }
+    });
+}
+
+
 let isCenteredOnWT = false;
 document.getElementById('toggle-wt-center').addEventListener('change', animateAllMutants);
 // Call this function on page load to initialize file lists
@@ -1455,6 +1551,8 @@ document.addEventListener("DOMContentLoaded", manageModeViews);
 document.addEventListener("DOMContentLoaded", showCookiesNotice);
 // Verify the plots take the right width when tab is changed
 document.addEventListener("shown.bs.tab", e => resizePlotsInTab(e.target.hash));
+// import data on click
+document.getElementById('import-btn').addEventListener('click', importLocalFile);
 
 // apply hideThresholds on page load and on change of radio buttons
 hideThresholds();
