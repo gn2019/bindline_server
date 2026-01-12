@@ -1,9 +1,10 @@
+import functools
 import uuid
 
 from flask import flash, Blueprint, request
 from flask_login import login_required, current_user
 
-from .database_setup import db, File, FileType
+from .database_setup import db, File, FileType, Pfam
 
 # create blueprint for file operations
 files_bp = Blueprint('files', __name__)
@@ -149,3 +150,26 @@ def delete_file(file_uuid):
     else:
         flash('File not found or unauthorized.')
         return {'success': False}, 404
+
+
+def get_pfam_ids(file_id):
+    file = get_file_by_id(file_id)
+    if not file:
+        return []
+    return [pfam.id for pfam in file.pfams]
+
+
+@functools.lru_cache(maxsize=128)
+def get_pfam_name(pfam_id):
+    pfam = Pfam.query.filter_by(id=pfam_id).first()
+    return pfam.name if pfam else None
+
+
+def list_pfams():
+    return Pfam.query.order_by(Pfam.name).all()
+
+
+def update_file_pfams(file, pfam_ids):
+    pfams = Pfam.query.filter(Pfam.id.in_(pfam_ids)).all()
+    file.pfams = pfams
+    db.session.commit()

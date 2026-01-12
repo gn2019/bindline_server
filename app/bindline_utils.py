@@ -21,6 +21,10 @@ def list_user_public_fasta_file_names():
     return sum(map(lambda fs: [f.filename for f in fs], files.list_user_public_fasta_files()), [])
 
 
+def list_pfam_jsons():
+    return [p.to_json() for p in files.list_pfams()]
+
+
 def get_insertion_fractions(num_of_fractions, base_index):
     return [base_index + (i + 1) / (num_of_fractions + 1) for i in range(num_of_fractions)]
 
@@ -276,6 +280,21 @@ def show_diff_only(binding_sites, ref_name):
                 binding_sites[protein_file][input_seq] = added + removed
         # Delete the reference bs dict
         binding_sites[protein_file][ref_name] = []
+
+
+def get_pfam_map(score_file_ids):
+    """
+    return a map from pfam_name to protein files
+    """
+    pfam_map = {}
+    for file_id in score_file_ids:
+        pfam_ids = files.get_pfam_ids(file_id)
+        if not pfam_ids:
+            filename = files.get_file_by_id(file_id).filename
+            pfam_map.setdefault(filename, []).append(filename)
+        for pfam_id in pfam_ids:
+            pfam_map.setdefault(files.get_pfam_name(pfam_id), []).append(files.get_file_by_id(file_id).filename)
+    return pfam_map
 
 
 def get_binding_sites(highest_values, seq, mer, aligned_positions):

@@ -116,6 +116,13 @@ def update_mats(file):
     load_user_identifiers(force=True)
 
 
+def update_file_pfams(stored_files, pfam_ids):
+    if isinstance(stored_files, files.File):
+        stored_files = (stored_files,)
+    for file in stored_files:
+        files.update_file_pfams(file, pfam_ids)
+
+
 @app.route("/download/sample-score")
 def download_sample_score():
     return send_from_directory(os.path.join(app.root_path, 'static', 'samples'), 'score.tsv')
@@ -146,6 +153,10 @@ def upload_and_update_db(file, file_type):
         return file_metadata
 
 
+def get_pfam_ids(request):
+    return [int(request.form[var]) for var in request.form if var.startswith('pfam_') and request.form[var].isdigit()]
+
+
 def get_score_files(request):
     if 'score' in request.files and request.files.getlist('score')[0].filename:
         # save them (it's a list of files)
@@ -157,6 +168,7 @@ def get_score_files(request):
                 if not file:
                     return jsonify({'error': f'Failed to upload score file {score_file.filename}.'}), 500
                 stored_files.append(file)
+            update_file_pfams(stored_files, get_pfam_ids(request))
             # take their names
             return [(file.filename, get_file_path(file)) for file in stored_files]
         else:
@@ -165,11 +177,36 @@ def get_score_files(request):
     else:
         score_files = []
         for var in request.form:
-            if var.startswith('score_'):
+            if var.startswith('score_') and request.form[var].isdigit():
                 file_id = int(request.form[var])
                 file = files.get_file_by_id(file_id)
-                score_files.append((file.filename, get_file_path(file)),)
+                score_files.append((file.filename, get_file_path(file)), )
         return score_files
+
+
+def get_score_file_ids(request):
+    """
+    Returns two lists: list of file IDs and list of file names (for files that were not found).
+    """
+    if 'score' in request.files and request.files.getlist('score')[0].filename:
+        if current_user.is_authenticated:
+            file_ids, file_names = [], []
+            for score_file in request.files.getlist('score'):
+                file = files.get_file_by_name(score_file.filename, files.FileType.SCORE, is_public=False)
+                if file:
+                    file_ids.append(file.id)
+                else:
+                    file_names.append(score_file.filename)
+            return file_ids, file_names
+        return [], [score_file.filename for score_file in request.files.getlist('score')]
+    return [int(request.form[var]) for var in request.form if var.startswith('score_')], []
+
+
+def get_pfam_map_by_request(request):
+    file_ids, file_names = get_score_file_ids(request)
+    pfam_map = get_pfam_map(file_ids)
+    pfam_map.update({name: name for name in file_names})
+    return pfam_map
 
 
 def load_user_identifiers(force=False):
@@ -215,6 +252,8 @@ def list_files_(file_type):
         return jsonify(list_user_public_fasta_file_names())
     elif file_type == consts.SCORE:
         return jsonify(list_user_public_score_file_jsons())
+    elif file_type == 'pfam':
+        return jsonify(list_pfam_jsons())
     else:
         return jsonify({"error": "Invalid file type"}), 400
 
@@ -356,6 +395,8 @@ def find_binding_sites():
                 del identified_scores[file], identified_binding_sites[file], gaps[file], max_scores[file]
         binding_sites = {k: v for k, v in binding_sites.items() if v}
 
+    pfam_map = get_pfam_map(identified_unq_file_ids)
+
     plot_data = {
         'ref_name': ref_name,
         'sequence_strs': sequences,
@@ -368,6 +409,7 @@ def find_binding_sites():
         'insertions': insertions,
         'gaps': gaps,
         'threshold': selected_threshold,
+        'pfam_map': pfam_map,
     }
 
     print(plot_data)  # TODO: remove
@@ -445,6 +487,8 @@ def find_significant_mutations():
                 for i in reversed(indices_to_remove):
                     del curr_binding_sites[name][i]
 
+    pfam_map = get_pfam_map_by_request(request)
+
     plot_data = {
         'ref_name': ref_name,
         'sequence_strs': sequences,
@@ -459,6 +503,7 @@ def find_significant_mutations():
         'mutants_effect': mutants_effect,
         'ref_effect': ref_effect,
         'threshold': selected_threshold,
+        'pfam_map': pfam_map,
     }
 
     return Response(
@@ -521,11 +566,13 @@ def upload_files_():
         'threshold': selected_threshold,
     }
     if should_show_binding_sites:
+        pfam_map = get_pfam_map_by_request(request)
         plot_data.update({
             'highest_values': highest_values,
             'binding_sites': binding_sites,
             'gaps': gaps,
-            'insertions': insertions
+            'insertions': insertions,
+            'pfam_map': pfam_map,
         })
 
     return jsonify(plot_data)

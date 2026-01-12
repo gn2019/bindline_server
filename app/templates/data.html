@@ -87,6 +87,9 @@
                                         {% if (file.species) %}
                                             <div><strong>Species:</strong> {{ file.species }}</div>
                                         {% endif %}
+                                        {% if (file.pfams) %}
+                                            <div><strong>Families:</strong> {{ file.pfams | map(attribute='name') | join(', ') }}</div>
+                                        {% endif %}
                                     </div>
                                     {% if (file.notes) %}
                                         <div class="d-flex flex-wrap gap-3">
