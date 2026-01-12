@@ -61,6 +61,37 @@ function loadExistingFiles() {
         });
 }
 
+
+function handleSelect2Paste() {
+    const select = $(this);
+    const input = select.data('select2').$container.find('.select2-search__field')[0];
+
+    if (input._bulkPasteAttached) return;
+    input._bulkPasteAttached = true;
+    // build lookup once per select
+    const optionMap = new Map(
+        select.find('option').toArray().map(o => [o.text, o.value])
+    );
+
+    input.addEventListener('paste', function (e) {
+        const text = e.clipboardData.getData('text');
+        if (!text.includes('\n')) return;
+
+        e.preventDefault();
+
+        const values = text.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+        const selected = new Set(select.val() || []);
+
+        for (const v of values) {
+            if (optionMap.has(v)) {
+                selected.add(optionMap.get(v));
+            }
+        }
+        select.val([...selected]).trigger('change');
+    });
+}
+
+
 function showScoreFile(file) {
     // Build metadata elements only if the field exists
     let metaParts = [];
@@ -1602,6 +1633,8 @@ function arePfamsAggregated() {
     return document.getElementById('toggle-agg-pfam').checked;
 }
 
+$('#existing_score').on('select2:open', handleSelect2Paste);
+$('#pfam-select').on('select2:open', handleSelect2Paste);
 
 document.getElementById('toggle-wt-center').addEventListener('change', animateAllMutants);
 document.getElementById('toggle-agg-pfam').addEventListener('change', aggPfams);
