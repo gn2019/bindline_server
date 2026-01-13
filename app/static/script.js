@@ -201,7 +201,7 @@ function isRefRow(row) {
 }
 
 function isCheckedRow(row) {
-    return row.querySelector('input[type="checkbox"]').checked;
+    return row.querySelector('[data-role="plot-checkbox"]').checked;
 }
 
 function setAsRefInner(row) {
@@ -216,9 +216,10 @@ function createCheckboxTd(row) {
     const plotCell = document.createElement('td');
     const plotCheckbox = document.createElement('input');
     plotCheckbox.type = 'checkbox';
+    plotCheckbox.setAttribute('data-role', 'plot-checkbox');
     plotCheckbox.checked = true; // Default to checked
     // when pressed, if is unchecked and is ref, find the first row with checked checkbox and set it as ref
-    plotCheckbox.addEventListener('click', (event) => {
+    plotCheckbox.addEventListener('click', () => {
         if (!isCheckedRow(row) && isRefRow(row)) {
             setFirstAsRef();
         }
@@ -231,6 +232,7 @@ function createInputTd(value) {
     const cell = document.createElement('td');
     const input = document.createElement('input');
     input.type = 'text';
+    input.setAttribute('data-role', 'sequence-name');
     input.value = value;
     cell.appendChild(input);
     return cell;
@@ -239,6 +241,7 @@ function createInputTd(value) {
 function createTextAreaTd(value) {
     const cell = document.createElement('td');
     const sequenceInput = document.createElement('textarea');
+    sequenceInput.setAttribute('data-role', 'sequence-value');
     sequenceInput.rows = 2;
     sequenceInput.value = value;
 
@@ -253,9 +256,10 @@ function createTextAreaTd(value) {
 
 function createActionsTd(row) {
     const cell = document.createElement('td');
-
     const deleteButton = document.createElement('button');
+
     deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
+    deleteButton.setAttribute('data-role', 'actions-delete');
     deleteButton.style.backgroundColor = 'transparent';
     deleteButton.style.border = 'none';
     deleteButton.addEventListener('click', (event) => {
@@ -268,6 +272,7 @@ function createActionsTd(row) {
     cell.appendChild(deleteButton);
 
     const setRefButton = document.createElement('button');
+    setRefButton.setAttribute('data-role', 'actions-setRef');
     setRefButton.className = 'set-ref-button';
     setRefButton.innerText = 'Set as Ref';
     setRefButton.addEventListener('click', (event) => {
@@ -281,7 +286,7 @@ function createActionsTd(row) {
 
 function getRowBySequenceName(name) {
     for (let row of getSequenceRows()) {
-        const rowName = row.cells[1].querySelector('input').value;
+        const rowName = row.querySelector('[data-role="sequence-name"]').value;
         if (rowName === name) {
             return row;
         }
@@ -345,8 +350,8 @@ function gatherSelectedSequences() {
     const selectedSequences = {};
     getSequenceRows().forEach(row => {
         if (isCheckedRow(row)) {
-            const name = row.cells[1].querySelector('input').value;
-            selectedSequences[name] = row.cells[2].querySelector('textarea').value;
+            const name = row.querySelector('[data-role="sequence-name"]').value;
+            selectedSequences[name] = row.querySelector('[data-role="sequence-value"]').value;
         }
     });
     if (Object.keys(selectedSequences).length === 0) {
@@ -521,6 +526,7 @@ async function handlePlotData(plotData) {
 
     function plotComponent(component) {
         const div = document.getElementById(component.id);
+        div.removeAllListeners?.();
         div.innerHTML = '';
         toggleLoading(component.id, true); // Show spinner
         toggleInfoPopover(component.id.replace('-plot', '-container'), false); // hide popover
@@ -1152,17 +1158,10 @@ function createAllMutantsTraces(plotData) {
 }
 
 function getAllMutantsPlotLayout() {
-    const layout = {
+    return {
         xaxis: {title: {text: "Position"}, tickmode: "linear"},
         yaxis: {title: {text: "Effect (ΔScore)"}},
         template: "plotly_white"
-    };
-    return layout;
-    return {
-        xaxis: {title: {text: 'Position'}},
-        yaxis: {title: {text: 'Score'}},
-        hovermode: 'closest',
-        showlegend: true,
     };
 }
 
@@ -1282,21 +1281,6 @@ function setXTicks(plotDiv) {
     }
 }
 
-function splitRanges(ranges) {
-    const groups = [];
-    for (const range of ranges) {
-        let placed = false;
-        for (const group of groups) {
-            if (!group.some(([start, end]) => range[0] <= end && range[1] >= start)) {
-                group.push(range);
-                placed = true;
-                break;
-            }
-        }
-        if (!placed) groups.push([range]);
-    }
-    return groups;
-}
 
 function getKmerFromAlignedSeq(aligned_seq, k, start = 0) {
     // get substring of length k from aligned_seq, without any gaps
