@@ -489,7 +489,7 @@ async function handlePlotData(plotData) {
             traceFunc: createBindingSiteTraces,
             layoutFunc: getBindingSitesPlotLayout,
             callbackFunc: (component) => {
-                aggPfamOnClick(component.div);
+                groupPfamOnClick(component.div);
             }
         },
         allMutants: {
@@ -582,7 +582,7 @@ function addDownloadButton(exportUrl) {
 }
 
 
-function aggPfamOnClick(plotDiv) {
+function groupPfamOnClick(plotDiv) {
     plotDiv.on('plotly_click', (e) => {
         const clicked = plotDiv.data[e.points[0].curveNumber];
         if (!clicked?.pfam) return;
@@ -641,8 +641,8 @@ function relayoutBindingSitesPlot(plotDiv) {
 }
 
 
-function aggPfams() {
-    const shouldAggPfams = arePfamsAggregated();
+function groupPfams() {
+    const shouldGroupPfams = arePfamsGrouped();
     const plotDiv = document.getElementById('binding-sites-plot');
 
     const traceIndices = [];
@@ -654,9 +654,9 @@ function aggPfams() {
         if (!t.pfam) return;
 
         const nowOnPfam = t.y[0] === t.pfam;
-        if (nowOnPfam === shouldAggPfams) return;
+        if (nowOnPfam === shouldGroupPfams) return;
 
-        const newY = shouldAggPfams ? t.pfam : t.file;
+        const newY = shouldGroupPfams ? t.pfam : t.file;
 
         traceIndices.push(i);
         yUpdates.push(Array(t.x.length).fill(newY));
@@ -946,7 +946,7 @@ function createTraces(plotData) {
 
 
 function shouldShowByPfams(pfamMap, numSequences) {
-    // We want aggregation in 2 cases:
+    // We want grouping in 2 cases:
     // 1. >1 pfams, >1 files, >1 per pfam
     // 2. >1 seqs, 1 pfam, >1 files, >1 per pfam
     const numPfams = Object.keys(pfamMap).length;
@@ -968,7 +968,7 @@ function createBindingSiteTraces(plotData) {
         Object.keys(plotData.binding_sites).forEach(fileName => {
             plotData.pfam_map[fileName] = [fileName];
         });
-        document.querySelector('#toggle-agg-pfam-div').classList.remove('show-with-plot');
+        document.querySelector('#toggle-group-pfam-div').classList.remove('show-with-plot');
     }
 
     const pfamNum = Object.keys(plotData.pfam_map).length;
@@ -1629,15 +1629,15 @@ function isCenteredOnWT() {
 }
 
 
-function arePfamsAggregated() {
-    return document.getElementById('toggle-agg-pfam').checked;
+function arePfamsGrouped() {
+    return document.getElementById('toggle-group-pfam').checked;
 }
 
 $('#existing_score').on('select2:open', handleSelect2Paste);
 $('#pfam-select').on('select2:open', handleSelect2Paste);
 
 document.getElementById('toggle-wt-center').addEventListener('change', animateAllMutants);
-document.getElementById('toggle-agg-pfam').addEventListener('change', aggPfams);
+document.getElementById('toggle-group-pfam').addEventListener('change', groupPfams);
 // Call this function on page load to initialize file lists
 loadExistingFiles();
 document.getElementById('load-sequences').addEventListener('click', loadSequences);

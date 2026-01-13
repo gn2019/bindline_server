@@ -112,6 +112,7 @@
             You may choose from public PBM datasets or upload your own.
             As a logged-on user you may upload files for a continuous use.
             Some of the public results, and possibly yours, has only part of the score types (see below).
+            Protein may be related to one or more families (PFAMs), which are used for grouping in plots.
             <br>
             DNA sequences can be loaded from FASTA files or entered directly in the sequence table.
             All sequences in a single analysis must be aligned.
@@ -284,6 +285,9 @@
     Discrete visualization of binding events enabled by score thresholds.
     Each binding site is represented as a rectangle spanning the sequence from the first to last nucleotide of the k-mers above the selected threshold.
     There may be overlapping binding sites for the same protein.
+    By default, if there are multiple protein families (PFAMs) that the examined proteins belong to, grouping of their binding sites is performed to reduce visual clutter.
+    By clicking on a binding site rectangle, its PFAM's traces are grouped / ungrouped.
+    A toggle button allows switching between these views for all binding sites.
 </p>
 
 <h5>All Mutants</h5>
@@ -291,6 +295,7 @@
     Summary of the effect of individual point mutations on binding scores.
     Each bar represents a single-nucleotide substitution relative to the reference sequence.
     The value indicates the difference between the highest score in the k-mer range between the mutant and the reference.
+    A toggle button allows switching between the absolute value (score) and the effect of the mutation (difference = Δscore).
     It is important to pay attention to the absolute score values, and not to the mutation effect only.
     For that, it is recommended to look only at sites of interest in this plot.
 </p>
