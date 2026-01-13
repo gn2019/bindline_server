@@ -15,13 +15,16 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
-async function waitForOption(selectBox, value, byId=false, interval=50) {
-    while (true) {
-        if (selectBox && [...selectBox.options].some(o => (byId ? o.value : o.text) == value)) {
-            return;
+async function waitForOption(selectBox, value, { byId=false, interval=50, timeout=10000 } = {}) {
+    console.log('byId', byId);
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        if ([...selectBox.options].some(o => (byId ? o.value : o.text) == value)) {
+            return true;
         }
-        await new Promise(resolve => setTimeout(resolve, interval));
+        await new Promise(r => setTimeout(r, interval));
     }
+    throw new Error(`Option "${value}" not found`);
 }
 
 function clearSelect2Box(elementId) {
@@ -35,7 +38,7 @@ function clearSelect2Box(elementId) {
 async function setSelect2BoxValue(elementId, choices, byId=false) {
     const selectBox = document.getElementById(elementId);
     for (const choice of choices) {
-        await waitForOption(selectBox, choice, byId).then(() => {
+        await waitForOption(selectBox, choice, {byId: byId}).then(() => {
             const option = [...selectBox.options].find(o => (byId ? o.value : o.text) == choice);
             option.selected = true;
         });
