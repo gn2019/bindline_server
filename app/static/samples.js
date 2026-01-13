@@ -55,9 +55,11 @@ function setRadioValue(name, value) {
     const radios = document.getElementsByName(name);
     radios.forEach(radio => {
         if (radio.value === value) {
-            radio.checked = true;
+            if (!radio.checked) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event("change"));
+            }
         }
-        radio.dispatchEvent(new Event("change"));
     });
 }
 
