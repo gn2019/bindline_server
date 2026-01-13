@@ -1,3 +1,4 @@
+'use strict';
 function showToast(type, message, delay = 100000000000) {
     const toastContainer = document.getElementById("toastContainer");
 

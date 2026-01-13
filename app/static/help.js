@@ -1,3 +1,4 @@
+'use strict';
 // Enable modal on ALL images in help page, EXCEPT the modal image itself
 document.addEventListener("DOMContentLoaded", function () {
     const modal = document.getElementById("imageModal");

@@ -1,3 +1,4 @@
+'use strict';
 window.addEventListener('DOMContentLoaded', () => {
     const sampleId = new URLSearchParams(window.location.search).get('sample_id');
     switch (sampleId) {

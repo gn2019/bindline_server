@@ -1,3 +1,4 @@
+'use strict';
 // Load existing E-Score files into dropdown and enable searchable multi-selection
 function loadExistingFiles() {
     fetch('/list-files/score')

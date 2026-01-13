@@ -1,3 +1,4 @@
+'use strict';
 document.addEventListener("DOMContentLoaded", function () {
     // Get the modal elements
     const loginModal = document.getElementById("loginModal");
