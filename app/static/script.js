@@ -46,7 +46,6 @@ function loadExistingFiles() {
             const pfamDropdown = $('#pfam-select'); // Use jQuery selector for Select2
             pfamDropdown.empty(); // Clear previous options
 
-            console.log(pfams);
             // Populate options
             for (const pfam of pfams) {
                 pfamDropdown.append(new Option(pfam.name, pfam.id, false, false));

@@ -28,7 +28,7 @@ function clearSelect2Box(elementId) {
     for (const option of selectBox.options) {
         option.selected = false;
     }
-    $(selectBox).trigger('change');
+    selectBox.dispatchEvent(new Event("change"));
 }
 
 async function setSelect2BoxValue(elementId, choices, byId=false) {
@@ -40,7 +40,7 @@ async function setSelect2BoxValue(elementId, choices, byId=false) {
         });
     }
     // make the value appear in the select2 box
-    $(selectBox).trigger('change');
+    selectBox.dispatchEvent(new Event("change"));
 }
 
 
