@@ -39,7 +39,7 @@ export function showToasts(toasts) {
     } else if (typeof toasts.error === "string") {
         showToast("error", toasts.error);
     }
-    if (Array.isArray(toasts.warnings)) {
+    if (Array.isArray(toasts.warning)) {
         toasts.warning.forEach(msg => showToast("warning", msg));
     } else if (typeof toasts.warning === "string") {
         showToast("warning", toasts.warning);
