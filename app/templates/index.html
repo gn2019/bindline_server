@@ -332,7 +332,7 @@ Link is valid for 24 hours."></div>
 
     {% include 'footer.html' %}
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script src="{{ url_for('static', filename='samples.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='samples.js') }}"></script>
 </body>
 </html>

@@ -1,4 +1,8 @@
 'use strict';
+import * as UTILS from './utils.js';
+import { showToast, showToasts } from './toast.js';
+import { addSequenceRow, getRefRow, setFirstAsRef, getSequenceRows, isCheckedRow, } from './sequences_table.js';
+
 // Load existing E-Score files into dropdown and enable searchable multi-selection
 function loadExistingFiles() {
     fetch('/list-files/score')
@@ -34,7 +38,7 @@ function loadExistingFiles() {
     fetch('/list-files/fasta')
         .then(response => response.json())
         .then(files => {
-            const fastaDropdown = document.getElementById('existing_fasta');
+            const fastaDropdown = UTILS.getElementByIdOrThrow('existing_fasta');
             fastaDropdown.innerHTML = ''; // Clear previous options
             files.forEach(file => {
                 fastaDropdown.append(new Option(file, file, false, false));
@@ -126,13 +130,13 @@ async function loadSequences() {
     const fastaSource = getActiveTab('fasta-tabs');
     let formData = new FormData();
     if (fastaSource === 'fasta-upload') {
-        const fastaFile = document.getElementById('fasta').files[0];
+        const fastaFile = UTILS.getElementByIdOrThrow('fasta').files[0];
         if (!fastaFile) {
             throw new Error("Please upload a DNA FASTA file first.");
         }
         formData.append('fasta', fastaFile);
     } else if (fastaSource === 'fasta-existing') {
-        const existingFastaSelect = document.getElementById('existing_fasta');
+        const existingFastaSelect = UTILS.getElementByIdOrThrow('existing_fasta');
         if (!existingFastaSelect.value) {
             throw new Error("Please select a DNA FASTA file first.");
         }
@@ -152,7 +156,7 @@ async function loadSequences() {
                 return;
             }
 
-            const sequenceTbody = document.getElementById('sequence-tbody');
+            const sequenceTbody = UTILS.getElementByIdOrThrow('sequence-tbody');
             sequenceTbody.innerHTML = ''; // Clear previous rows
 
             Object.keys(data.sequences).forEach(seqName => {
@@ -162,163 +166,11 @@ async function loadSequences() {
         .catch(handleError);
 }
 
-function getSequenceRows() {
-    return document.querySelectorAll('#sequence-tbody tr');
-}
-
-function setAsRef(row) {
-    if (!isCheckedRow(row)) {
-        return;
-    }
-    // remove ref class from other rows
-    getSequenceRows().forEach(row => {
-        unsetAsRefInner(row);
-    });
-    setAsRefInner(row);
-}
-
-function getFirstCheckedRow() {
-    for (let row of getSequenceRows()) {
-        if (isCheckedRow(row)) {
-            return row;
-        }
-    }
-}
-
-function getRefRow() {
-    return document.querySelector('#sequence-tbody tr.ref');
-}
-
-function setFirstAsRef() {
-    const row = getFirstCheckedRow();
-    if (row) {
-        setAsRef(row)
-    }
-}
-
-function isRefRow(row) {
-    return row.classList.contains('ref');
-}
-
-function isCheckedRow(row) {
-    return row.querySelector('[data-role="plot-checkbox"]').checked;
-}
-
-function setAsRefInner(row) {
-    row.classList.add('ref');
-}
-
-function unsetAsRefInner(row) {
-    row.classList.remove('ref');
-}
-
-function createCheckboxTd(row) {
-    const plotCell = document.createElement('td');
-    const plotCheckbox = document.createElement('input');
-    plotCheckbox.type = 'checkbox';
-    plotCheckbox.setAttribute('data-role', 'plot-checkbox');
-    plotCheckbox.checked = true; // Default to checked
-    // when pressed, if is unchecked and is ref, find the first row with checked checkbox and set it as ref
-    plotCheckbox.addEventListener('click', () => {
-        if (!isCheckedRow(row) && isRefRow(row)) {
-            setFirstAsRef();
-        }
-    });
-    plotCell.appendChild(plotCheckbox);
-    return plotCell;
-}
-
-function createInputTd(value) {
-    const cell = document.createElement('td');
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.setAttribute('data-role', 'sequence-name');
-    input.value = value;
-    cell.appendChild(input);
-    return cell;
-}
-
-function createTextAreaTd(value) {
-    const cell = document.createElement('td');
-    const sequenceInput = document.createElement('textarea');
-    sequenceInput.setAttribute('data-role', 'sequence-value');
-    sequenceInput.rows = 2;
-    sequenceInput.value = value;
-
-    // responsive behavior
-    sequenceInput.style.width = '100%';
-    sequenceInput.style.resize = 'vertical';
-    sequenceInput.style.boxSizing = 'border-box';
-
-    cell.appendChild(sequenceInput);
-    return cell;
-}
-
-function createActionsTd(row) {
-    const cell = document.createElement('td');
-    const deleteButton = document.createElement('button');
-
-    deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
-    deleteButton.setAttribute('data-role', 'actions-delete');
-    deleteButton.style.backgroundColor = 'transparent';
-    deleteButton.style.border = 'none';
-    deleteButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        document.getElementById('sequence-tbody').removeChild(row);
-        if (isRefRow(row)) {
-            setFirstAsRef();
-        }
-    });
-    cell.appendChild(deleteButton);
-
-    const setRefButton = document.createElement('button');
-    setRefButton.setAttribute('data-role', 'actions-setRef');
-    setRefButton.className = 'set-ref-button';
-    setRefButton.innerText = 'Set as Ref';
-    setRefButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        setAsRef(row);
-    });
-    cell.appendChild(setRefButton);
-
-    return cell;
-}
-
-function getRowBySequenceName(name) {
-    for (let row of getSequenceRows()) {
-        const rowName = row.querySelector('[data-role="sequence-name"]').value;
-        if (rowName === name) {
-            return row;
-        }
-    }
-    return null;
-}
-
-function removeAllSequenceRows() {
-    const sequenceTbody = document.getElementById('sequence-tbody');
-    sequenceTbody.innerHTML = '';
-}
-
-// Add a new row to the table with optional name and sequence values
-function addSequenceRow(name = '', sequence = '') {
-    const row = document.createElement('tr');
-    row.appendChild(createCheckboxTd(row));
-    row.appendChild(createInputTd(name));
-    row.appendChild(createTextAreaTd(sequence));
-    row.appendChild(createActionsTd(row));
-
-    const sequenceTbody = document.getElementById('sequence-tbody');
-    sequenceTbody.appendChild(row);
-    // if no ref, set first as ref
-    if (!getRefRow()) {
-        setFirstAsRef();
-    }
-}
 
 async function uploadAndPlot() {
     showGlobalLoading(); // Show loading animation before request
 
-    const formData = new FormData(document.getElementById('upload-form'));
+    const formData = new FormData(UTILS.getElementByIdOrThrow('upload-form'));
     try {
         // if no rows of sequences, load them
         if (!$('#sequence-tbody tr').length) {
@@ -377,8 +229,8 @@ function getReferenceName() {
 function appendSequencesAndOptions(formData, selectedSequences, refName) {
     formData.append('sequences', JSON.stringify(selectedSequences));
     formData.append('ref_name', refName);
-    formData.append('show_diff_only', document.getElementById('show-diff-only').checked);
-    formData.append('search_significant_mutations', document.getElementById('search-significant-mutations').checked);
+    formData.append('show_diff_only', UTILS.getElementByIdOrThrow('show-diff-only').checked);
+    formData.append('search_significant_mutations', UTILS.getElementByIdOrThrow('search-significant-mutations').checked);
 
     appendThresholds(formData);
     appendScoreFiles(formData);
@@ -395,8 +247,8 @@ function appendThresholds(formData) {
     };
 
     for (const [checkboxId, inputId] of Object.entries(thresholds)) {
-        if (document.getElementById(checkboxId).checked) {
-            formData.append(inputId, document.getElementById(inputId).value);
+        if (UTILS.getElementByIdOrThrow(checkboxId).checked) {
+            formData.append(inputId, UTILS.getElementByIdOrThrow(inputId).value);
         }
     }
 }
@@ -413,7 +265,7 @@ function appendScoreFiles(formData) {
     // get the active tab name in score_source
     const scoreSource = getActiveTab('score-tabs');
     if (scoreSource === 'score-existing') {
-        const selectedFiles = Array.from(document.getElementById('existing_score').selectedOptions).map(option => option.value);
+        const selectedFiles = Array.from(UTILS.getElementByIdOrThrow('existing_score').selectedOptions).map(option => option.value);
         if (selectedFiles.length === 0) {
             throw new Error('Please select at least one protein score file.');
         }
@@ -422,7 +274,7 @@ function appendScoreFiles(formData) {
         return;
     }
     if (scoreSource === 'score-upload') {
-        const uploadedFile = document.getElementById('score').files;
+        const uploadedFile = UTILS.getElementByIdOrThrow('score').files;
         if (uploadedFile.length === 0) {
             throw new Error('Please upload at least one protein score file.');
         }
@@ -440,7 +292,7 @@ function appendPfams(formData) {
     // get the active tab name in score_source
     const scoreSource = getActiveTab('score-tabs');
     if (scoreSource === 'score-upload') {
-        const selectedPfams = Array.from(document.getElementById('pfam-select').selectedOptions).map(option => option.value);
+        const selectedPfams = Array.from(UTILS.getElementByIdOrThrow('pfam-select').selectedOptions).map(option => option.value);
         // add list of the pfams to formData
         selectedPfams.forEach((pfam, index) => formData.append(`pfam_${index}`, pfam));
     }
@@ -460,7 +312,7 @@ function validateConditions(formData, selectedSequences) {
         'enable_escore_threshold',
         'enable_zscore_threshold',
         'enable_iscore_threshold'
-    ].some(id => document.getElementById(id).checked);
+    ].some(id => UTILS.getElementByIdOrThrow(id).checked);
 
     if ((searchSignificantMutations || searchBindingSites) && !thresholdsEnabled) {
         throw new Error('Please enable at least one threshold, to filter the data for binding sites only.');
@@ -506,9 +358,9 @@ async function handlePlotData(plotData) {
     };
     // leave only the plots that are checked
     for (const [key, component] of Object.entries(plotComponents)) {
-        const tabNavigation = document.getElementById(component.id.replace('-plot', '-tab-nav'));
+        const tabNavigation = UTILS.getElementByIdOrThrow(component.id.replace('-plot', '-tab-nav'));
         if (component.checkFunc && !component.checkFunc(plotData)) {
-            document.getElementById(component.id).innerHTML = '';  // remove plot
+            UTILS.getElementByIdOrThrow(component.id).innerHTML = '';  // remove plot
             delete plotComponents[key];
             tabNavigation.classList.add('d-none');
         } else {
@@ -518,14 +370,14 @@ async function handlePlotData(plotData) {
 
 
     function toggleLoading(divId, show) {
-        const spinner = document.getElementById(`${divId}-loading`);
+        const spinner = UTILS.getElementByIdOrThrow(`${divId}-loading`);
         if (spinner) {
             spinner.style.display = show ? 'block' : 'none';
         }
     }
 
     function plotComponent(component) {
-        const div = document.getElementById(component.id);
+        const div = UTILS.getElementByIdOrThrow(component.id);
         div.removeAllListeners?.();
         div.innerHTML = '';
         toggleLoading(component.id, true); // Show spinner
@@ -576,7 +428,7 @@ function addDownloadButton(exportUrl) {
         return;
     }
     // write export path as a title
-    const exportPathDiv = document.getElementById('export-div');
+    const exportPathDiv = UTILS.getElementByIdOrThrow('export-div');
     // make a clickable link to the export path
     const link = document.createElement('a');
     link.href = exportUrl;
@@ -649,7 +501,7 @@ function relayoutBindingSitesPlot(plotDiv) {
 
 function groupPfams() {
     const shouldGroupPfams = arePfamsGrouped();
-    const plotDiv = document.getElementById('binding-sites-plot');
+    const plotDiv = UTILS.getElementByIdOrThrow('binding-sites-plot');
 
     const traceIndices = [];
     const yUpdates = [];
@@ -969,16 +821,19 @@ function createBindingSiteTraces(plotData) {
     const colorPalettes = getColorPalettes(); // Get color palettes for consistent coloring
     const yLabels = []; // Store unique y-axis labels
 
-    if (!shouldShowByPfams(plotData.pfam_map, Object.keys(plotData.sequence_strs).length)) {
-        plotData.pfam_map = new Map();
+    let pfamMap;
+    if (shouldShowByPfams(plotData.pfam_map, Object.keys(plotData.sequence_strs).length)) {
+        pfamMap = plotData.pfam_map;
+    } else {
+        pfamMap = new Map();
         Object.keys(plotData.binding_sites).forEach(fileName => {
-            plotData.pfam_map[fileName] = [fileName];
+            pfamMap[fileName] = [fileName];
         });
         document.querySelector('#toggle-group-pfam-div').classList.remove('show-with-plot');
     }
 
-    const pfamNum = Object.keys(plotData.pfam_map).length;
-    Object.entries(plotData.pfam_map).forEach(([pfamName, fileNames], pfamIndex) => {
+    const pfamNum = Object.keys(pfamMap).length;
+    Object.entries(pfamMap).forEach(([pfamName, fileNames], pfamIndex) => {
         const colorPalette = colorPalettes[(pfamNum - 1 - pfamIndex) % colorPalettes.length];
         for (const fileName of fileNames) {
             const fileBindingSites = plotData.binding_sites[fileName];
@@ -1306,10 +1161,10 @@ function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
 
 // Function to toggle slider and input enabled/disabled state using the checkbox
 function toggleSliderAndInput(checkboxId, sliderId, inputId) {
-    const checkbox = document.getElementById(checkboxId);
+    const checkbox = UTILS.getElementByIdOrThrow(checkboxId);
     const label = document.querySelector(`label[for="${checkboxId}"]`);
-    const slider = document.getElementById(sliderId);
-    const input = document.getElementById(inputId);
+    const slider = UTILS.getElementByIdOrThrow(sliderId);
+    const input = UTILS.getElementByIdOrThrow(inputId);
 
     checkbox.addEventListener('change', function () {
         const isEnabled = checkbox.checked;
@@ -1322,8 +1177,8 @@ function toggleSliderAndInput(checkboxId, sliderId, inputId) {
 
 // Function to synchronize slider and input values
 function syncSliderAndInput(sliderId, inputId) {
-    const slider = document.getElementById(sliderId);
-    const input = document.getElementById(inputId);
+    const slider = UTILS.getElementByIdOrThrow(sliderId);
+    const input = UTILS.getElementByIdOrThrow(inputId);
 
     slider.addEventListener('input', function () {
         input.value = slider.value; // Update input when slider changes
@@ -1336,7 +1191,7 @@ function hideThresholds() {
     const scores = ['escore', 'zscore', 'iscore'];
 
     for (let score in scores) {
-        let thresholdDiv = document.getElementById(`${scores[score]}_threshold`);
+        let thresholdDiv = UTILS.getElementByIdOrThrow(`${scores[score]}_threshold`);
         if (fileType === scores[score]) {
             thresholdDiv.style.display = "flex";
         } else {
@@ -1350,7 +1205,6 @@ let loadingInterval;
 function showGlobalLoading() {
     const loadingDiv = document.getElementById("global-loading");
     const loadingDots = document.getElementById("loading-dots");
-
     if (!loadingDiv || !loadingDots) return;
 
     loadingDiv.classList.remove("d-none"); // Show loading message
@@ -1417,9 +1271,9 @@ function resizePlotsInTab(tabSelector) {
 
 function manageModeViews() {
     const viewModeRadio = getRadio("view-option");
-    const stackedContainer = document.getElementById("stacked-container");
-    const plotTabs = document.getElementById("plot-tabs");
-    const plotStacked = document.getElementById("plot-stacked");
+    const stackedContainer = UTILS.getElementByIdOrThrow("stacked-container");
+    const plotTabs = UTILS.getElementByIdOrThrow("plot-tabs");
+    const plotStacked = UTILS.getElementByIdOrThrow("plot-stacked");
 
     const plotDivs = document.querySelectorAll(".plot-container");
 
@@ -1435,7 +1289,7 @@ function manageModeViews() {
                 // Move plots to tab content
                 plotDivs.forEach(plotDiv => {
                     const tabId = plotDiv.id.replace("-container", "-tab");
-                    const tabContent = document.getElementById(tabId);
+                    const tabContent = UTILS.getElementByIdOrThrow(tabId);
                     tabContent.appendChild(plotDiv);
                 });
                 plotStacked.classList.add("d-none");
@@ -1453,7 +1307,7 @@ function manageModeViews() {
 }
 
 function toggleInfoPopover(containerId, show) {
-    const container = document.getElementById(containerId);
+    const container = UTILS.getElementByIdOrThrow(containerId);
     const infoBtn = container.querySelector('.info-button');
     if (!infoBtn) return;
     // Show icon
@@ -1473,7 +1327,7 @@ function toggleInfoPopover(containerId, show) {
 }
 
 function togglePlotRelatedElements(containerId, show) {
-    const container = document.getElementById(containerId);
+    const container = UTILS.getElementByIdOrThrow(containerId);
     const elements = container.querySelector('.show-with-plot');
     if (!elements) return;
 
@@ -1492,8 +1346,8 @@ function initTooltips() {
 }
 
 function showCookiesNotice() {
-    const notice = document.getElementById("cookieNotice");
-    const okBtn = document.getElementById("cookieOk");
+    const notice = UTILS.getElementByIdOrThrow("cookieNotice");
+    const okBtn = UTILS.getElementByIdOrThrow("cookieOk");
 
     if (!localStorage.getItem("cookieNoticeSeen")) {
     notice.style.display = "block";
@@ -1508,7 +1362,7 @@ function showCookiesNotice() {
 
 function animateAllMutants() {
     const shouldCenterOnWT = isCenteredOnWT();
-    const plot = document.getElementById('all-mutants-plot');
+    const plot = UTILS.getElementByIdOrThrow('all-mutants-plot');
 
     const newY = plot.data.map(trace => {
         if (trace.delta === undefined) return trace.y;
@@ -1609,25 +1463,25 @@ function importLocalFile() {
 
 
 function isCenteredOnWT() {
-    return document.getElementById('toggle-wt-center').checked;
+    return UTILS.getElementByIdOrThrow('toggle-wt-center').checked;
 }
 
 
 function arePfamsGrouped() {
-    return document.getElementById('toggle-group-pfam').checked;
+    return UTILS.getElementByIdOrThrow('toggle-group-pfam').checked;
 }
 
 $('#existing_score').on('select2:open', handleSelect2Paste);
 $('#pfam-select').on('select2:open', handleSelect2Paste);
 
-document.getElementById('toggle-wt-center').addEventListener('change', animateAllMutants);
-document.getElementById('toggle-group-pfam').addEventListener('change', groupPfams);
+UTILS.getElementByIdOrThrow('toggle-wt-center').addEventListener('change', animateAllMutants);
+UTILS.getElementByIdOrThrow('toggle-group-pfam').addEventListener('change', groupPfams);
 // Call this function on page load to initialize file lists
 loadExistingFiles();
-document.getElementById('load-sequences').addEventListener('click', loadSequences);
-document.getElementById('add-sequence-row').addEventListener('click', () => addSequenceRow(name = `seq_${Math.floor(Math.random() * 99999999)}`));
+UTILS.getElementByIdOrThrow('load-sequences').addEventListener('click', loadSequences);
+UTILS.getElementByIdOrThrow('add-sequence-row').addEventListener('click', () => addSequenceRow(name = `seq_${Math.floor(Math.random() * 99999999)}`));
 // Handle uploading and plotting data from multiple E-Score files
-document.getElementById('upload-and-plot').addEventListener('click', uploadAndPlot);
+UTILS.getElementByIdOrThrow('upload-and-plot').addEventListener('click', uploadAndPlot);
 // Manage tab change
 document.addEventListener("DOMContentLoaded", manageModeViews);
 // Show cookies notice
@@ -1635,7 +1489,7 @@ document.addEventListener("DOMContentLoaded", showCookiesNotice);
 // Verify the plots take the right width when tab is changed
 document.addEventListener("shown.bs.tab", e => resizePlotsInTab(e.target.hash));
 // import data on click
-document.getElementById('import-btn').addEventListener('click', importLocalFile);
+UTILS.getElementByIdOrThrow('import-btn').addEventListener('click', importLocalFile);
 
 // apply hideThresholds on page load and on change of radio buttons
 hideThresholds();

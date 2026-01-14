@@ -1,7 +1,9 @@
 'use strict';
+import * as UTILS from './utils.js';
+
 // Enable modal on ALL images in help page, EXCEPT the modal image itself
 document.addEventListener("DOMContentLoaded", function () {
-    const modal = document.getElementById("imageModal");
+    const modal = UTILS.getElementByIdOrThrow("imageModal");
     const modalImgId = "modalImage";
 
     // Select all images except the modal image and images with class "no-zoom"
@@ -15,14 +17,14 @@ document.addEventListener("DOMContentLoaded", function () {
             if (modal.classList.contains('show')) return;
 
             // Show clicked image in modal
-            const modalImg = document.getElementById(modalImgId);
+            const modalImg = UTILS.getElementByIdOrThrow(modalImgId);
             modalImg.src = this.src;
             new bootstrap.Modal(modal).show();
         });
     });
 
     // Optional: close modal when user clicks the large image (toggle behavior)
-    const modalImg = document.getElementById(modalImgId);
+    const modalImg = UTILS.getElementByIdOrThrow(modalImgId);
     modalImg.style.cursor = "zoom-out";
     modalImg.addEventListener("click", function (e) {
         // stop propagation so underlying page handlers aren't triggered

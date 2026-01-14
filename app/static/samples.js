@@ -1,4 +1,7 @@
 'use strict';
+import * as UTILS from './utils.js';
+import { setSequences, getRowBySequenceName, setAsRef } from './sequences_table.js';
+
 window.addEventListener('DOMContentLoaded', () => {
     const sampleId = new URLSearchParams(window.location.search).get('sample_id');
     switch (sampleId) {
@@ -16,7 +19,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 async function waitForOption(selectBox, value, { byId=false, interval=50, timeout=10000 } = {}) {
-    console.log('byId', byId);
     const start = Date.now();
     while (Date.now() - start < timeout) {
         if ([...selectBox.options].some(o => (byId ? o.value : o.text) == value)) {
@@ -28,7 +30,7 @@ async function waitForOption(selectBox, value, { byId=false, interval=50, timeou
 }
 
 function clearSelect2Box(elementId) {
-    const selectBox = document.getElementById(elementId);
+    const selectBox = UTILS.getElementByIdOrThrow(elementId);
     for (const option of selectBox.options) {
         option.selected = false;
     }
@@ -36,7 +38,7 @@ function clearSelect2Box(elementId) {
 }
 
 async function setSelect2BoxValue(elementId, choices, byId=false) {
-    const selectBox = document.getElementById(elementId);
+    const selectBox = UTILS.getElementByIdOrThrow(elementId);
     for (const choice of choices) {
         await waitForOption(selectBox, choice, {byId: byId}).then(() => {
             const option = [...selectBox.options].find(o => (byId ? o.value : o.text) == choice);
@@ -49,7 +51,7 @@ async function setSelect2BoxValue(elementId, choices, byId=false) {
 
 
 function setCheckboxValue(elementId, isChecked=true) {
-    const checkbox = document.getElementById(elementId);
+    const checkbox = UTILS.getElementByIdOrThrow(elementId);
     checkbox.checked = isChecked;
     checkbox.dispatchEvent(new Event("change"));
 }
@@ -69,21 +71,12 @@ function setRadioValue(name, value) {
 
 
 function setNumberValue(elementId, number) {
-    const numberInput = document.getElementById(elementId);
+    const numberInput = UTILS.getElementByIdOrThrow(elementId);
     numberInput.value = number;
 }
 
-
-function setSequences(sequences) {
-    removeAllSequenceRows();
-    for (const [name, value] of Object.entries(sequences)) {
-        addSequenceRow(name, value);
-    }
-}
-
-
 function pressButton(elementId) {
-    const button = document.getElementById(elementId);
+    const button = UTILS.getElementByIdOrThrow(elementId);
     button.click();
 }
 
@@ -91,14 +84,12 @@ function unsetExistingScore() {
     clearSelect2Box('existing_score');
 }
 
-
 async function setExistingScore(choices, byId=false) {
     if (!Array.isArray(choices)) {
         choices = [choices];
     }
     await setSelect2BoxValue('existing_score', choices, byId);
 }
-
 
 function send() {
     pressButton('upload-and-plot');

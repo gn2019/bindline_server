@@ -1,15 +1,18 @@
 'use strict';
+import * as UTILS from './utils.js';
+import { showToast } from './toast.js';
+
 document.addEventListener("DOMContentLoaded", function () {
     // Get the modal elements
-    const loginModal = document.getElementById("loginModal");
-    const registerModal = document.getElementById("registerModal");
+    const loginModal = UTILS.getElementByIdOrThrow("loginModal");
+    const registerModal = UTILS.getElementByIdOrThrow("registerModal");
 
     // Get URLs from data attributes
     const loginUrl = loginModal.getAttribute("data-url-login");
     const registerUrl = registerModal.getAttribute("data-url-register");
 
     // Handle login form submission
-    document.getElementById("loginForm").addEventListener("submit", function (event) {
+    UTILS.getElementByIdOrThrow("loginForm").addEventListener("submit", function (event) {
         event.preventDefault();
         const formData = new FormData(this);
 
@@ -29,7 +32,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Handle register form submission
-    document.getElementById("registerForm").addEventListener("submit", function (event) {
+    UTILS.getElementByIdOrThrow("registerForm").addEventListener("submit", function (event) {
         event.preventDefault();
         const formData = new FormData(this);
 

@@ -1,6 +1,8 @@
 'use strict';
-function showToast(type, message, delay = 100000000000) {
-    const toastContainer = document.getElementById("toastContainer");
+import * as UTILS from './utils.js';
+
+export function showToast(type, message, delay = 100000000000) {
+    const toastContainer = UTILS.getElementByIdOrThrow("toastContainer");
 
     let bgClass = "text-bg-primary";
     if (type === "error") bgClass = "text-bg-danger";
@@ -30,7 +32,7 @@ function showToast(type, message, delay = 100000000000) {
     });
 }
 
-function showToasts(toasts) {
+export function showToasts(toasts) {
     console.log(toasts);
     if (Array.isArray(toasts.error)) {
         toasts.error.forEach(msg => showToast("error", msg));
