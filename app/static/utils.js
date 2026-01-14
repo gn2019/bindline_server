@@ -1,4 +1,3 @@
-'use strict';
 export function getElementByIdOrThrow(id) {
     const element = document.getElementById(id);
     if (!element) {

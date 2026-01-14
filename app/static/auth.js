@@ -1,4 +1,3 @@
-'use strict';
 import * as UTILS from './utils.js';
 import { showToast } from './toast.js';
 

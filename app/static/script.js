@@ -1,4 +1,3 @@
-'use strict';
 import * as UTILS from './utils.js';
 import { showToast, showToasts } from './toast.js';
 import { addSequenceRow, getRefRow, setFirstAsRef, getSequenceRows, isCheckedRow, } from './sequences_table.js';

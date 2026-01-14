@@ -1,4 +1,3 @@
-'use strict';
 import * as UTILS from './utils.js';
 import { setSequences, getRowBySequenceName, setAsRef } from './sequences_table.js';
 

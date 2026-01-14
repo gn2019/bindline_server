@@ -1,4 +1,3 @@
-'use strict';
 import * as UTILS from './utils.js';
 
 export function showToast(type, message, delay = 100000000000) {

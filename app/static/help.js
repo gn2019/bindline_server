@@ -1,4 +1,3 @@
-'use strict';
 import * as UTILS from './utils.js';
 
 // Enable modal on ALL images in help page, EXCEPT the modal image itself
