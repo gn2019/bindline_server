@@ -184,7 +184,7 @@ function hideDownloadButton() {
     }
 }
 
-function importQueryData(queryData) {
+export function importQueryData(queryData) {
     resetForm();
     hideDownloadButton();
     if (queryData.score_source != null) {

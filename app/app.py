@@ -449,7 +449,7 @@ def get_query_data(request):
 # download the zip file
 @app.route('/results/<dir_name>/<file_name>', methods=['GET'])
 def download_results(dir_name, file_name):
-    return send_from_directory(os.path.join(consts.RESULTS_DIR, dir_name), file_name)
+    return send_from_directory(os.path.join(app.root_path, '..', consts.RESULTS_DIR, dir_name), file_name)
 
 
 def find_significant_mutations():

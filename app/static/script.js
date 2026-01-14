@@ -1,6 +1,7 @@
 import * as UTILS from './utils.js';
 import { showToast, showToasts } from './toast.js';
 import { addSequenceRow, getRefRow, setFirstAsRef, getSequenceRows, isCheckedRow, } from './sequences_table.js';
+import { importQueryData, } from './samples.js';
 
 // Load existing E-Score files into dropdown and enable searchable multi-selection
 function loadExistingFiles() {
