@@ -3,6 +3,7 @@ import uuid
 
 from flask import flash, Blueprint, request
 from flask_login import login_required, current_user
+from sqlalchemy.orm import selectinload
 
 from .database_setup import db, File, FileType, Pfam
 
@@ -120,6 +121,11 @@ def list_user_fasta_files():
 
 def list_public_score_files():
     return File.query.filter_by(is_public=True, file_type=FileType.SCORE).order_by(File.filename).all()
+
+
+def list_public_score_files_with_pfams():
+    files = File.query.filter_by(is_public=True, file_type=FileType.SCORE).order_by(File.filename).options(selectinload(File.pfams)).all()
+    return files
 
 
 def list_public_fasta_files():

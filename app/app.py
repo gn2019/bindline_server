@@ -720,7 +720,7 @@ def data_page():
     return render_template("data.html",
         is_authenticated=current_user.is_authenticated,
         fasta_files=files.list_public_fasta_files(),
-        score_files=files.list_public_score_files()
+        score_files=files.list_public_score_files_with_pfams()
     )
 
 
