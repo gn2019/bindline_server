@@ -57,7 +57,7 @@
         <ol>
             <li>Select a protein dataset (public PBM data or your own uploaded results).</li>
             <li>Load one or more DNA sequences (via FASTA files or manual input). When multiple sequences are uploaded for comparison, they must be aligned, with the first sequence serving as the reference.</li>
-            <li>Choose a score type (E-score and Z-scores provide comparable, dimensionless measures).</li>
+            <li>Choose a score type (E-score and Z-score provide comparable, dimensionless measures).</li>
             <li>Inspect the BindLine plot to identify regions of strong or differential binding.</li>
             <li>Optionally apply thresholds to highlight binding sites and enable additional plots.</li>
             <li>Use advanced options to search across proteins, scan the full input sequence for single–base-pair variant effects, or compare binding predictions to a reference sequence.</li>
@@ -74,12 +74,12 @@
         <div class="col-md-8">
             <p class="text-justify">
                 BindLine is an interactive web tool for exploring protein–DNA interactions using Protein Binding Microarray (PBM) data.
-                PBM experiments measure relative binding strength of all possible DNA k-mers (sequences in lengths "k"), allowing binding preferences to be examined along full DNA sequences rather than summarized as a single consensus motif.
+                PBM experiments measure the relative binding strength of all possible DNA k-mers (sequences of length "k"), allowing binding preferences to be examined along full DNA sequences rather than summarized as a single consensus motif.
                 <br>
                 BindLine visualizes these quantitative scores directly on any DNA sequence,
                 enabling identification of binding sites even when binding is weak, degenerate, or distributed across multiple sequence contexts.
                 <br>
-                BindLine is an interactive tool, allowing users a smooth exploration of their data through zooming, panning, and toggling visibility of sequences and proteins.
+                BindLine is an interactive tool, allowing users smooth exploration of the data through zooming, panning, and toggling visibility of sequences and proteins.
             </p>
         </div>
         <div class="col-md-4 img-col">
@@ -110,9 +110,9 @@
             BindLine operates on protein PBM results and DNA sequences.
             <br>
             You may choose from public PBM datasets or upload your own.
-            As a logged-on user you may upload files for a continuous use.
-            Some of the public results, and possibly yours, has only part of the score types (see below).
-            Protein may be related to one or more families (PFAMs), which are used for grouping in plots.
+            As a logged-in user, you may upload files for continuous use.
+            Some of the public results, and possibly yours, have only part of the score types (see below).
+            Protein may be associated with to one or more families (PFAMs), which are used for grouping in plots.
             <br>
             DNA sequences can be loaded from FASTA files or entered directly in the sequence table.
             All sequences in a single analysis must be aligned.
@@ -147,7 +147,7 @@
             <li><strong>E-score</strong> – Rank-based normalized enrichment score (−0.5 to 0.5).</li>
         </ul>
         <p class="text-justify">
-            Score types that are excluded from the uploaded PBM results are unsupported.
+            Score types that are not included in from the uploaded PBM results are unsupported.
             You can choose the desired type before analysis.
             The "BindLine" plot displays the selected score along the aligned sequences.
             Each point corresponds to the score of the k-mer starting at that nucleotide position.
@@ -171,7 +171,7 @@
 <div class="row align-items-center">
     <div class="col-md-8">
         <p class="text-justify">
-            BindLine offers applying thresholds for each score type, enabling identification of significant binding events.
+            BindLine offers the application of thresholds for each score type, enabling identification of significant binding events.
             You may enable and adjust them with sliders or numeric input fields.
             Ranks threshold, which highlights only the top-scoring k-mers, is also available.
             When thresholds are enabled, the "Binding Sites" plot appears and visualizes overlapping, competing, or nearby binding events.
@@ -206,7 +206,7 @@
             Scan all available protein datasets and display only those with at least one k-mer exceeding the selected
             threshold in the input sequences.
             This mode is useful when the relevant transcription factor is unknown.
-            We recommend not to use a low threshold, as the results will be noisy.
+            We recommend not using a low threshold, as the results will be noisy.
         </p>
     </div>
     <div class="col-md-4 img-col">
@@ -229,7 +229,7 @@
         <p class="text-justify">
             Analyze the effects of single-nucleotide substitutions, insertions, and deletions derived from a reference sequence.
             Only mutations that create binding sites based on the selected threshold are shown.
-            Mutations producing identical binding behavior are collapsed and shown only once.
+            Mutations that produce identical binding behavior are collapsed and shown only once.
             When using this option, the "All Mutants" plot appears.
             It summarizes the effect of each substitution mutation on binding scores.
         </p>
@@ -277,7 +277,7 @@
     Double-clicking a legend entry isolates that sequence.
     If more than one sequence / protein are shown, additional legend entries appear to control groups of lines of the same sequence / protein.
     Maximal score for each protein is indicated by a dashed line.
-    Zooming by click-and-drag or by control buttons change the x-axis range in all plots simultaneously.
+    Zooming by click-and-drag or by control buttons changes the x-axis range in all plots simultaneously.
 </p>
 
 <h5>Binding Sites</h5>
@@ -286,15 +286,15 @@
     Each binding site is represented as a rectangle spanning the sequence from the first to last nucleotide of the k-mers above the selected threshold.
     There may be overlapping binding sites for the same protein.
     By default, if there are multiple protein families (PFAMs) that the examined proteins belong to, grouping of their binding sites is performed to reduce visual clutter.
-    By clicking on a binding site rectangle, its PFAM's traces are grouped / ungrouped.
+    By clicking a binding site rectangle, the traces of its PFAM are grouped / ungrouped.
     A toggle button allows switching between these views for all binding sites.
 </p>
 
 <h5>All Mutants</h5>
 <p>
-    Summary of the effect of individual point mutations on binding scores.
+    Summary of the effects of individual point mutations on binding scores.
     Each bar represents a single-nucleotide substitution relative to the reference sequence.
-    The value indicates the difference between the highest score in the k-mer range between the mutant and the reference.
+    The value indicates the difference between the highest score in the k-mer range of the mutant and the reference.
     A toggle button allows switching between the absolute value (score) and the effect of the mutation (difference = Δscore).
     It is important to pay attention to the absolute score values, and not to the mutation effect only.
     For that, it is recommended to look only at sites of interest in this plot.
