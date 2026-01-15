@@ -840,7 +840,9 @@ function createBindingSiteTraces(plotData) {
             const seqsNum = Object.keys(fileBindingSites).length;
             Object.entries(fileBindingSites).reverse().forEach(([seqName, bindingSites], seqIndex) => {
                 const fileYLabel = `${seqName} (${fileName})`;
-                const pfamYLabel = fileName === pfamName ? undefined : `${seqName} (${pfamName})`; // Create the y-axis label
+                // Create the y-axis label
+                const pfamYLabel = fileName === pfamName ? undefined
+                    : `${seqName} (${pfamName}) [${fileNames.length} file${fileNames.length > 1 ? 's': ''}]`;
                 const curYLabel = pfamYLabel || fileYLabel;
 
                 if (!yLabels.includes(curYLabel)) {
