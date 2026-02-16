@@ -17,12 +17,12 @@ def handle_registration(username, password):
     # username must be alphanumeric and between 3 and 20 characters
     if not username.isalnum() or not 3 <= len(username) <= 20:
         flash('Invalid username.')
-        return {'success': False}, 400
+        return {'success': False, 'error': 'Username must be alphanumeric and between 3 and 20 characters.'}
 
     existing_user = User.query.filter_by(username=username).first()
     if existing_user:
         flash('Username already exists.')
-        return {'success': False}, 409
+        return {'success': False, 'error': 'Username already exists.'}
 
     hashed_password = generate_password_hash(password)
     new_user = User(username=username, password=hashed_password, uuid=str(uuid.uuid4()))
@@ -35,7 +35,7 @@ def handle_registration(username, password):
         return {'success': True}
     else:
         flash('Login after registration failed.')
-        return {'success': False}, 500
+        return {'success': False, 'error': 'Registration succeeded but login failed due to server error.'}
 
 
 @auth_bp.route('/register', methods=['POST'])
@@ -49,7 +49,7 @@ def get_uuid():
     if current_user.is_authenticated:
         return {'uuid': get_current_user_uuid()}
     else:
-        return {'uuid': None}, 401
+        return {'uuid': None}
 
 
 @auth_bp.route('/get_name_by_uuid/<uuid>', methods=['GET'])
@@ -58,7 +58,7 @@ def get_name_by_uuid(uuid):
     if user:
         return {'username': user.username}
     else:
-        return {'username': None}, 404
+        return {'username': None}
 
 
 def handle_login(username, password):
@@ -70,10 +70,10 @@ def handle_login(username, password):
             return {'success': True}
         else:
             flash('Login failed.')
-            return {'success': False}, 500
+            return {'success': False, 'error': 'Login failed due to server error.'}
     else:
         flash('Invalid credentials.')
-        return {'success': False}, 401
+        return {'success': False, 'error': 'Invalid username or password.'}
 
 
 @auth_bp.route('/login', methods=['POST'])

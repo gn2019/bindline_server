@@ -68,7 +68,7 @@ def error_wrapped(func):
             return func(*args, **kwargs)
         except Exception as e:
             traceback.print_exc()
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)})
     return inner
 
 
@@ -166,7 +166,7 @@ def get_score_files(request):
             for score_file in score_files:
                 file = upload_and_update_db(score_file, files.FileType.SCORE)
                 if not file:
-                    return jsonify({'error': f'Failed to upload score file {score_file.filename}.'}), 500
+                    return jsonify({'error': f'Failed to upload score file {score_file.filename}.'})
                 stored_files.append(file)
             update_file_pfams(stored_files, get_pfam_ids(request))
             # take their names
@@ -255,7 +255,7 @@ def list_files_(file_type):
     elif file_type == 'pfam':
         return jsonify(list_pfam_jsons())
     else:
-        return jsonify({"error": "Invalid file type"}), 400
+        return jsonify({"error": "Invalid file type"})
 
 
 @app.route('/', methods=['GET'])
@@ -295,17 +295,17 @@ def get_sequences_():
             if file:
                 fasta_path = get_file_path(file)
             else:
-                return jsonify({'error': 'Failed to upload FASTA file.'}), 500
+                return jsonify({'error': 'Failed to upload FASTA file.'})
         else:
             # pass as a stream without saving
             fasta_path = io.StringIO(fasta_file.read().decode("utf-8"))
     elif existing_fasta:
         file = files.get_file_by_name(existing_fasta, files.FileType.FASTA)
         if not file:
-            return jsonify({'error': 'FASTA file not found.'}), 404
+            return jsonify({'error': 'FASTA file not found.'})
         fasta_path = get_file_path(file)
     else:
-        return jsonify({'error': 'No FASTA file provided.'}), 400
+        return jsonify({'error': 'No FASTA file provided.'})
 
     try:
         # Extract sequences from the FASTA file using bindline
@@ -314,7 +314,7 @@ def get_sequences_():
         # Log the exception and print stack trace
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)})
 
     return jsonify({'sequences': sequences})
 
@@ -628,9 +628,9 @@ def delete_file_(file_id):
     if os.path.exists(file_path):
         os.remove(file_path)
         delete_from_mats(file_metadata)
-        return jsonify({'message': 'File deleted successfully'})
+        return jsonify({'success': True})
     else:
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({'success': False, 'error': 'File not found'})
 
 
 def get_download_name(filename):
@@ -660,11 +660,11 @@ def download_public_file_(file_id):
         file_path = os.path.abspath(file_path)
         # avoid downloading if not in uploads
         if not file_path.startswith(os.path.abspath(consts.UPLOAD_DIR)):
-            return jsonify({'error': 'File not found'}), 404
+            return jsonify({'error': 'File not found'})
         return send_from_directory(os.path.dirname(file_path), os.path.basename(file_path),
                                    as_attachment=True, download_name=get_download_name(file.filename))
     else:
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({'error': 'File not found'})
 
 
 @app.route('/download/<file_id>')

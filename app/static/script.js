@@ -192,7 +192,13 @@ async function uploadAndPlot() {
 
     await fetch('/upload', {method: 'POST', body: formData})
         .then(response => response.json())
-        .then(plotData => handlePlotData(plotData))
+        .then(plotData => {
+            if (plotData.error || plotData.warning) {
+                return handleError(plotData);
+            } else {
+                return handlePlotData(plotData);
+            }
+        })
         .catch(handleError);
 }
 
@@ -632,7 +638,7 @@ function toggleSequence(plotDiv, sequence) {
 /** Handle and log errors */
 function handleError(error) {
     hideGlobalLoading();
-    showToast('error', error.message);
+    showToasts(error);
     console.error(error);
 }
 

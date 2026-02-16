@@ -21,7 +21,7 @@ def upload_metadata_route():
     if success:
         return {'success': True, 'file_uuid': new_file.uuid}
     else:
-        return {'success': False}, 500
+        return {'success': False, 'error': 'File metadata upload failed.'}
 
 
 @files_bp.route('/delete', methods=['POST'])
@@ -30,9 +30,9 @@ def delete_file_route():
     file_type = FileType[request.form.get('file_type')]
     file = get_file_by_name(filename, file_type)
     if not file:
-        return {'success': False, 'error': 'File not found'}, 404
+        return {'success': False, 'error': 'File not found'}
     if file.is_public:
-        return {'success': False, 'error': 'Cannot delete public file'}, 403
+        return {'success': False, 'error': 'Cannot delete public file'}
     return delete_file(file.uuid)
 
 
@@ -42,7 +42,7 @@ def get_name_by_uuid(uuid):
     if file and (file.is_public or (current_user.is_authenticated and file.user_id == current_user.id)):
         return {'filename': file.filename}
     else:
-        return {'filename': None}, 404
+        return {'filename': None, 'error': 'File not found or unauthorized'}
 
 
 @files_bp.route('/get_file', methods=['POST'])
@@ -59,7 +59,7 @@ def get_file_by_name_route():
             'is_public': file.is_public
         }
     else:
-        return {'error': 'File not found'}, 404
+        return {'error': 'File not found'}
 
 
 def upload_metadata(filename, file_type, is_public):
@@ -155,7 +155,7 @@ def delete_file(file_uuid):
         return {'success': True}
     else:
         flash('File not found or unauthorized.')
-        return {'success': False}, 404
+        return {'success': False, 'error': 'File not found or unauthorized.'}
 
 
 def get_pfam_ids(file_id):

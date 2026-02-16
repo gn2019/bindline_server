@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 bootstrap.Modal.getInstance(registerModal).hide();  // Close modal
                 location.reload();
             } else {
-                showToast("error", "Registration failed: " + data.message);
+                showToast("error", "Registration failed: " + data.error);
             }
         });
     });
