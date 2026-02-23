@@ -9,6 +9,7 @@ import zipfile
 import ssl
 import json
 import io
+import re
 
 from . import auth
 from . import bindline
@@ -321,7 +322,7 @@ def get_sequences_():
 
 def get_sequences_from_request(request):
     sequences = json.loads(request.form.get('sequences'))
-    return {name: seq.upper() for name, seq in sequences.items()}
+    return {name: re.sub(r'\s+', '', seq.upper()) for name, seq in sequences.items()}
 
 
 def find_binding_sites():
