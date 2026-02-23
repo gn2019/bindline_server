@@ -48,4 +48,8 @@ export function showToasts(toasts) {
     } else if (typeof toasts.success === "string") {
         showToast("success", toasts.success);
     }
+    // if toasts is an error object itself, show it as an error toast
+    if (toasts instanceof Error) {
+        showToast("error", toasts.message);
+    }
 }
