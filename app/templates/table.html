@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BindLine</title>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+
+</head>
+<body class="container-fluid p-3">
+
+    {% include 'header.html' %}
+
+    <div id="cookieNotice" class="cookie-notice shadow-lg">
+      <div class="cookie-title">🍪 Cookie notice</div>
+      <div class="cookie-text">
+        This website uses <strong>essential session cookies only</strong>.
+        No tracking, no analytics.
+      </div>
+      <button id="cookieOk" class="btn btn-sm btn-primary mt-2">
+        Got it
+      </button>
+    </div>
+
+    <div class="position-relative container-fluid p-3">
+        <!-- Toggle Button for Collapsible Form -->
+        <button class="btn btn-outline-primary btn-sm p-0 position-absolute start-0 me-2"
+                type="button" data-bs-toggle="collapse" data-bs-target="#upload-form-container"
+                aria-expanded="false" id="toggle-btn">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+
+        <!-- Collapsible Form Container -->
+        <div id="upload-form-container" class="collapse show">
+            <form id="upload-form">
+                <h6 class="text-center fw-bold mb-3">
+                    Explore protein–DNA interactions using PBM data. To start, choose protein!
+                </h6>
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center flex-wrap">
+                        <h6 class="fw-bold me-5 mt-2">Protein</h6>
+                    </div>
+                    <div id="score-tabs" class="tab-content">
+                      <!-- Existing -->
+                      <div class="tab-pane fade show active" id="score-existing">
+                        <select id="existing_score" class="form-select form-select-sm w-100" size="5"></select>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center flex-wrap">
+                        <h6 class="fw-bold mt-3">Score Type:</h6>
+                        <div class="btn-group w-10 mt-2">
+                            <input type="radio" class="btn-check" name="file_type" id="escore" value="escore" checked>
+                            <label class="btn btn-outline-primary" for="escore"
+                                data-bs-toggle="tooltip" data-bs-placement="top" title="Normalized enrichment of each k-mer (-0.5 to 0.5)">
+                                E-Score
+                            </label>
+                            <input type="radio" class="btn-check" name="file_type" id="zscore" value="zscore">
+                            <label class="btn btn-outline-primary" for="zscore"
+                                data-bs-toggle="tooltip" data-bs-placement="top" title="Statistical significance of binding (0 = median across k-mers)">
+                                Z-Score
+                            </label>
+                            <input type="radio" class="btn-check" name="file_type" id="iscore" value="iscore">
+                            <label class="btn btn-outline-primary" for="iscore"
+                                data-bs-toggle="tooltip" data-bs-placement="top" title="Median intensity of each k-mer in the univeral microarray">
+                                I-Score
+                            </label>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+            </form>
+        </div>
+
+        <input id="filterInput" type="text" placeholder="Filter (IUPAC)" disabled>
+
+        <table id="scoreTable">
+            <thead>
+                <tr>
+                    <th>kmer</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody style="text-align: center"></tbody>
+        </table>
+    </div>
+    <div id="downloadCsvBtn"></div>
+
+    {% include 'footer.html' %}
+
+    <script type="module" src="{{ url_for('static', filename='table.js') }}"></script>
+</body>
+</html>

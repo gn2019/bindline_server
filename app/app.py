@@ -731,5 +731,22 @@ def favicon():
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
+@app.route("/table")
+def table_page():
+    return render_template("table.html", is_authenticated=current_user.is_authenticated)
+
+@app.route('/get_score_files/<protein>/<file_type>', methods=['GET'])
+def get_score_files_api(protein, file_type):
+    try:
+        file = files.get_file_by_id(int(protein))
+        _, _, table = get_score_table(get_file_path(file), file_type)
+        return jsonify({
+            "mer": table.mer,
+            "scores": [{"kmer": kmer, "score": score} for kmer, score in table._dict.items()]
+        })
+    except:
+        return jsonify({"error": "Invalid protein ID or file type"})
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=443, debug=True, ssl_context=context)
