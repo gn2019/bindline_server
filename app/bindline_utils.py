@@ -227,7 +227,7 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
     ref_effect = sliding_max(ref_scores, mer)
 
     letters_to_index = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
-    effects = np.zeros((len(sequences[ref_name]), len(letters_to_index)),)
+    effects = np.zeros((len(sequences[ref_name]), len(letters_to_index)), dtype=np.float16)
     for name, scores in aligned_scores.items():
         if name == ref_name:
             continue
@@ -237,7 +237,7 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
         mut_base = mut[-2].split('->')[-1]
         mut_pos = int(mut[-3])
         # for each position, take the max of mer scores
-        effects[mut_pos, letters_to_index[mut_base]] = np.array(scores[max(mut_pos-mer+1, 0):mut_pos+1]).max()
+        effects[mut_pos, letters_to_index[mut_base]] = max(scores[max(mut_pos-mer+1, 0):mut_pos+1])
     df = pd.DataFrame(columns=['A', 'C', 'G', 'T'])
     ref_seq = sequences[ref_name]
     for i in range(len(ref_seq)):
@@ -253,8 +253,9 @@ def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, seq
     selected_threshold = selected_threshold if selected_threshold is not None else -np.inf
     ranks_threshold = table.rank_threshold(ranks_threshold) if ranks_threshold is not None else -np.inf
     for name, scores in aligned_scores.items():
-        scores = np.array(scores, dtype=np.float32)
-        # highest scores are the ones above the absolute and relative thresholds, if exist
+        scores = np.array(scores, dtype=np.float16)
+        # Threshold equation: keep k-mers where (score >= AbsoluteThreshold) AND (score >= RankPercentile)
+        # RankPercentile is the score value at the top X% of all scores
         highest_values[name] = np.where(
             (scores >= selected_threshold) & (scores >= ranks_threshold),
             scores, None
@@ -280,6 +281,177 @@ def show_diff_only(binding_sites, ref_name):
                 binding_sites[protein_file][input_seq] = added + removed
         # Delete the reference bs dict
         binding_sites[protein_file][ref_name] = []
+
+
+def parse_mpra_dataframe(df):
+    """
+    Parse an MPRA CSV/TSV dataframe with columns: Position, Ref, Alt, Value, and
+    optionally P-Value. Returns (ref_sequence, variants) where variants is a list of
+    dicts with 0-based position (relative to the start of the reference), ref, alt,
+    value and p_value (or None).
+    """
+    required = {'Position', 'Ref', 'Alt', 'Value'}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(sorted(missing))}")
+
+    df = df.copy()
+    df['Ref'] = df['Ref'].astype(str).str.strip().str.upper()
+    df['Alt'] = df['Alt'].astype(str).str.strip().str.upper()
+    has_pvalue = 'P-Value' in df.columns
+
+    positions = df[['Position', 'Ref']].drop_duplicates().sort_values('Position')
+    min_pos, max_pos = int(positions['Position'].min()), int(positions['Position'].max())
+    expected = set(range(min_pos, max_pos + 1))
+    missing_pos = sorted(expected - set(positions['Position'].astype(int).tolist()))
+    if missing_pos:
+        raise ValueError(f"Missing positions in the reference sequence: {missing_pos}")
+
+    ref_sequence = ''.join(positions['Ref'].tolist())
+
+    variants = []
+    for _, row in df.iterrows():
+        value = row['Value']
+        p_value = row['P-Value'] if has_pvalue else None
+        variants.append({
+            'position': int(row['Position']) - min_pos,
+            'ref': row['Ref'],
+            'alt': row['Alt'],
+            'value': float(value) if pd.notna(value) else None,
+            'p_value': float(p_value) if p_value is not None and pd.notna(p_value) else None,
+        })
+    return ref_sequence, variants
+
+
+def build_mpra_exp_matrix(ref_sequence, variants):
+    """
+    Build the (len(ref_sequence), 3) experimental effect matrix used for correlating
+    against predicted TF effects: for each position, the Value of each of the 3
+    non-reference bases, in ACGT order (excluding whichever base is the reference).
+    """
+    letters_to_index = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+    exp_matrix = np.zeros((len(ref_sequence), 4), dtype=np.float16)
+    for v in variants:
+        if v['alt'] not in letters_to_index or v['value'] is None:
+            continue
+        exp_matrix[v['position'], letters_to_index[v['alt']]] = v['value']
+
+    filtered = []
+    for i, row in enumerate(exp_matrix):
+        ref = ref_sequence[i]
+        if ref not in letters_to_index:
+            raise ValueError(f"Invalid reference base '{ref}' at position {i} of the reference sequence.")
+        row = row.tolist()
+        row.pop(letters_to_index[ref])
+        filtered.append(row)
+    return np.vstack(filtered)
+
+
+def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
+    """
+    Slide a window of size `w` across `seq` and, for every TF row in the k-mer score
+    matrix `E` (TFs x 4^k), compute a magnitude-weighted correlation between the
+    TF's predicted per-base mutation effect and the experimental effect matrix `T`
+    (len(seq) x 3, ACGT order excluding the reference base per position).
+
+    Threshold equations:
+    - Correlation threshold: |magnitude-weighted correlation| >= thr (default 0.85)
+    - Effect magnitude threshold: max(|predicted effect|) >= var_thr (default 0.35)
+    - Alpha parameter: weight factor for correlation calculation (default 0.3)
+
+    Returns a list of (row_index_in_E, window_start_positions, correlation_scores)
+    for TFs that have at least one window passing both the correlation and effect
+    magnitude thresholds.
+    """
+    base = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+    s = np.fromiter((base[c] for c in seq), dtype=np.int8)
+    n = s.size
+    m = E.shape[0]
+
+    if n < k or n < w:
+        return []
+
+    # --- rolling k-mer indices ---
+    pows = (4 ** np.arange(k - 1, -1, -1)).astype(np.int64)
+    kidx = np.empty(n - k + 1, dtype=np.int64)
+    idx = (s[:k] * pows).sum()
+    kidx[0] = idx
+    for i in range(1, n - k + 1):
+        idx = (idx - s[i - 1] * pows[0]) * 4 + s[i + k - 1]
+        kidx[i] = idx
+
+    # scores along sequence (m, n-k+1)
+    S = E[:, kidx]
+
+    # --- starts per position ---
+    starts = [np.arange(max(0, i - (k - 1)), min(i, n - k) + 1) for i in range(n)]
+
+    # --- original max per position ---
+    orig = np.empty((m, n), dtype=E.dtype)
+    for i, js in enumerate(starts):
+        if js.size:
+            orig[:, i] = S[:, js].max(axis=1)
+        else:
+            orig[:, i] = 0
+
+    # --- precompute delta ---
+    delta = (np.arange(4)[None, :, None] - np.arange(4)[:, None, None]) * pows[None, None, :]
+
+    effects = np.empty((m, n, 3), dtype=E.dtype)
+
+    for i in range(n):
+        js = starts[i]
+        if js.size == 0:
+            effects[:, i, :] = 0
+            continue
+
+        offs = i - js
+        base_idx = kidx[js]
+        ref = int(s[i])
+
+        alts = np.array([0, 1, 2, 3], dtype=np.int8)
+        alts = alts[alts != ref]
+
+        d = delta[ref, alts][:, offs]       # (3, len_js)
+        idxs = base_idx[None, :] + d        # (3, len_js)
+
+        Smut = E[:, idxs]                   # (m, 3, len_js)
+        alt_max = Smut.max(axis=2)          # (m, 3)
+
+        effects[:, i, :] = alt_max - orig[:, i][:, None]
+
+    # --- sliding correlation with magnitude-weighted sign gain ---
+    L = 3 * w
+    if n - w + 1 <= 0:
+        return []
+
+    Tw = sliding_window_view(T, (w, 3)).reshape(n - w + 1, L).copy()
+    Tw_z = (Tw - Tw.mean(axis=1, keepdims=True)) / (Tw.std(axis=1, keepdims=True) + 1e-8)
+
+    Ew_all = sliding_window_view(effects, (1, w, 3)).copy()
+    Ew_all = Ew_all.reshape(m, n - w + 1, L)
+    Ew_z = (Ew_all - Ew_all.mean(axis=2, keepdims=True)) / (Ew_all.std(axis=2, keepdims=True) + 1e-8)
+
+    r = (Ew_z * Tw_z[None, :, :]).mean(axis=2)   # (m, n-w+1)
+
+    wgt = np.abs(Tw[None, :, :])
+    sign_agree = np.sign(Ew_all * Tw[None, :, :])
+    sign_score = (sign_agree * wgt).sum(axis=2) / (wgt.sum(axis=2) + 1e-8)
+    score = r + alpha * np.abs(sign_score)
+
+    altmax_all = effects + orig[:, :, None]
+    Aw = sliding_window_view(altmax_all, (1, w, 3)).reshape(m, n - w + 1, w, 3)
+    var_ok = (Aw.max(axis=(2, 3)) > var_thr)
+
+    mask = (score >= thr) & var_ok
+
+    hits = []
+    for t in range(m):
+        pos = np.where(mask[t])[0]
+        if pos.size:
+            hits.append((t, pos, r[t, pos]))
+
+    return hits
 
 
 def get_pfam_map(score_file_ids):

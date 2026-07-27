@@ -711,6 +711,127 @@ def bulk_action_():
         return send_file(mem, as_attachment=True, download_name="files.zip")
 
 
+@app.route('/mpra', methods=['GET'])
+def mpra_page():
+    return render_template('mpra.html', is_authenticated=current_user.is_authenticated)
+
+
+@app.route('/mpra/parse', methods=['POST'])
+def mpra_parse(*args, **kwargs):
+    return error_wrapped(mpra_parse_)(*args, **kwargs)
+
+
+def mpra_parse_():
+    import pandas as pd
+    mpra_file = request.files.get('mpra_csv')
+    if not mpra_file or not mpra_file.filename:
+        return jsonify({'error': 'No MPRA file provided.'})
+
+    delimiter = ',' if mpra_file.filename.lower().endswith('.csv') else '\t'
+    try:
+        df = pd.read_csv(mpra_file, delimiter=delimiter)
+        ref_sequence, variants = parse_mpra_dataframe(df)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to parse MPRA file: {e}'})
+
+    seq_name = request.form.get('seq_name') or os.path.splitext(mpra_file.filename)[0]
+    return jsonify({'seq_name': seq_name, 'ref_sequence': ref_sequence, 'variants': variants})
+
+
+@app.route('/mpra/single', methods=['POST'])
+def mpra_single(*args, **kwargs):
+    return error_wrapped(mpra_single_)(*args, **kwargs)
+
+
+def mpra_single_():
+    file_type = request.form.get('file_type')
+    ref_name = request.form.get('ref_name') or 'MPRA'
+    ref_sequence = re.sub(r'\s+', '', request.form.get('ref_sequence', '').upper())
+    if not ref_sequence:
+        return jsonify({'error': 'No reference sequence provided.'})
+
+    score_files = get_score_files(request)
+    if not score_files:
+        return jsonify({'error': 'Please select or upload a single protein score file.'})
+    score_file, score_path = score_files[0]
+
+    name, motif, table = get_score_table(score_path, file_type)
+    sequences = get_all_mutants(ref_name, ref_sequence)
+    scores_dict = table.score_seqs(sequences)
+
+    aligned_scores = {}
+    for name, (sequence_str, sequence_scores) in scores_dict.items():
+        if name == ref_name:
+            aligned_scores[name] = list(sequence_scores)
+        else:
+            _, _, aligned_scores[name] = align_scores_by_name(name, sequence_str, sequence_scores)
+
+    mutants_effect, ref_effect = get_all_mutants_effect(aligned_scores, sequences, ref_name, mer=table.mer)
+
+    return jsonify({
+        'ref_name': ref_name,
+        'score_file': score_file,
+        'sequence_strs': {ref_name: ref_sequence},
+        'mutants_effect': mutants_effect,
+        'ref_effect': ref_effect,
+        'max_score': table.max_score(),
+    })
+
+
+@app.route('/mpra/scan', methods=['POST'])
+def mpra_scan(*args, **kwargs):
+    return error_wrapped(mpra_scan_)(*args, **kwargs)
+
+
+def mpra_scan_():
+    file_type = request.form.get('file_type')
+    ref_sequence = re.sub(r'\s+', '', request.form.get('ref_sequence', '').upper())
+    if not ref_sequence:
+        return jsonify({'error': 'No reference sequence provided.'})
+    variants = json.loads(request.form.get('variants', '[]'))
+
+    window_size = int(request.form.get('window_size', 5))
+    corr_threshold = float(request.form.get('corr_threshold', 0.85))
+    var_threshold = float(request.form.get('var_threshold', 0.35))
+    alpha = float(request.form.get('alpha', 0.3))
+
+    exp_matrix = build_mpra_exp_matrix(ref_sequence, variants)
+    identifier = get_identifier_by_type(file_type)
+
+    hits = []
+    for k in sorted(identifier.abs_mat.keys()):
+        E = identifier.abs_mat[k]
+        E_ids = identifier.abs_ids[k]
+        if len(ref_sequence) < max(k, window_size):
+            continue
+        for idx, poss, scores in tf_window_hits(
+                E, ref_sequence, exp_matrix, w=window_size,
+                thr=corr_threshold, var_thr=var_threshold, k=k, alpha=alpha):
+            hits.append({
+                'file_id': int(E_ids[idx]),
+                'k': k,
+                'positions': poss.tolist(),
+                'scores': scores.tolist(),
+            })
+
+    unq_file_ids = sorted({h['file_id'] for h in hits})
+    file_meta = {}
+    for file_id in unq_file_ids:
+        file = files.get_file_by_id(file_id)
+        if file:
+            file_meta[file_id] = {'filename': file.filename}
+
+    pfam_map = get_pfam_map(unq_file_ids)
+
+    return jsonify({
+        'hits': hits,
+        'file_meta': file_meta,
+        'pfam_map': pfam_map,
+        'window_size': window_size,
+    })
+
+
 @app.route("/help")
 def help_page():
     return render_template("help.html", is_authenticated=current_user.is_authenticated)

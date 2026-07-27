@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BindLine - MPRA</title>
+    <script src="https://cdn.plot.ly/plotly-3.3.0.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+</head>
+<body class="container-fluid p-3">
+
+    {% include 'header.html' %}
+
+    <div class="container-fluid p-3">
+        <h6 class="text-center fw-bold mb-3">
+            Upload MPRA variant-effect data, compare it to a protein's predicted binding effect,
+            or scan your whole protein library for candidates that explain the signal.
+        </h6>
+
+        <!-- Step 1: upload MPRA data -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="fw-bold">1. Upload MPRA data</h6>
+                <p class="text-muted small mb-2">
+                    A CSV/TSV file with columns <code>Position</code>, <code>Ref</code>, <code>Alt</code>,
+                    <code>Value</code> and optionally <code>P-Value</code>. Every position between the
+                    minimum and maximum must be represented (by its <code>Ref</code> row) so the reference
+                    sequence can be reconstructed.
+                </p>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <input class="form-control form-control-sm w-auto" type="file" id="mpra-csv" accept=".csv,.tsv,.txt">
+                    <input class="form-control form-control-sm w-auto" type="text" id="mpra-seq-name" placeholder="Sequence name (optional)">
+                    <button class="btn btn-primary btn-sm" type="button" id="mpra-load-btn">Load MPRA Data</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mpra-results" class="d-none">
+            <!-- Unified combined plot: top = scan results, middle = MPRA experimental, bottom = predicted effect (optional) -->
+            <div id="mpra-combined-container" class="plot-container position-relative w-100 mb-3">
+                <div id="mpra-combined-plot" style="width:100%;height:640px;"></div>
+                <div id="mpra-combined-loading" class="loading-spinner d-none"></div>
+            </div>
+
+            <!-- Step 2: compare to a single protein -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6 class="fw-bold">2. Compare to a protein's predicted effect</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center flex-wrap">
+                                <ul class="nav nav-pills nav-sm" id="mpra-score-tabs-nav" role="tablist">
+                                    <li class="nav-item">
+                                        <button type="button" class="nav-link active" data-bs-toggle="pill" data-bs-target="#mpra-score-existing">Existing</button>
+                                    </li>
+                                    <li class="nav-item">
+                                        <button type="button" class="nav-link" data-bs-toggle="pill" data-bs-target="#mpra-score-upload">Upload</button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div id="mpra-score-tabs" class="tab-content">
+                                <div class="tab-pane fade show active" id="mpra-score-existing">
+                                    <select id="mpra-existing-score" class="form-select form-select-sm w-100"></select>
+                                </div>
+                                <div class="tab-pane fade" id="mpra-score-upload">
+                                    <input class="form-control form-control-sm" type="file" id="mpra-score-upload-input">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="btn-group w-100 mt-2">
+                                <input type="radio" class="btn-check" name="mpra_file_type" id="mpra-escore" value="escore" checked>
+                                <label class="btn btn-outline-primary btn-sm" for="mpra-escore">E-Score</label>
+                                <input type="radio" class="btn-check" name="mpra_file_type" id="mpra-zscore" value="zscore">
+                                <label class="btn btn-outline-primary btn-sm" for="mpra-zscore">Z-Score</label>
+                                <input type="radio" class="btn-check" name="mpra_file_type" id="mpra-iscore" value="iscore">
+                                <label class="btn btn-outline-primary btn-sm" for="mpra-iscore">I-Score</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-primary btn-sm mt-2" type="button" id="mpra-compare-btn">Compare</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Step 3: scan the whole library -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6 class="fw-bold">3. Scan your protein library for candidates</h6>
+                    <p class="text-muted small mb-2">
+                        Slides a window across the reference sequence and looks for proteins whose predicted
+                        mutation effects correlate with the experimental MPRA values in that window.
+                    </p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label small mb-0">Score Type</label>
+                            <div class="btn-group d-block">
+                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-escore" value="escore" checked>
+                                <label class="btn btn-outline-primary btn-sm" for="mpra-scan-escore">E</label>
+                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-zscore" value="zscore">
+                                <label class="btn btn-outline-primary btn-sm" for="mpra-scan-zscore">Z</label>
+                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-iscore" value="iscore">
+                                <label class="btn btn-outline-primary btn-sm" for="mpra-scan-iscore">I</label>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-0" for="mpra-window-size">Window size</label>
+                            <input type="number" class="form-control form-control-sm" id="mpra-window-size" value="5" min="2" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-0" for="mpra-corr-threshold" data-bs-toggle="tooltip" data-bs-placement="top" title="Threshold: |magnitude-weighted correlation| >= value. Filters proteins by correlation strength.">Correlation threshold</label>
+                            <input type="number" class="form-control form-control-sm" id="mpra-corr-threshold" value="0.85" step="0.05" min="-1" max="2">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-0" for="mpra-var-threshold" data-bs-toggle="tooltip" data-bs-placement="top" title="Threshold: max(|predicted effect|) >= value. Filters by minimum effect magnitude.">Effect-magnitude threshold</label>
+                            <input type="number" class="form-control form-control-sm" id="mpra-var-threshold" value="0.35" step="0.05">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label small mb-0" for="mpra-alpha" data-bs-toggle="tooltip" data-bs-placement="top" title="Weight factor for sign agreement in correlation calculation. Higher = more weight on sign matching.">Sign-agreement weight (alpha)</label>
+                            <input type="number" class="form-control form-control-sm" id="mpra-alpha" value="0.3" step="0.05" min="0" max="1">
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-primary btn-sm" type="button" id="mpra-scan-btn">Scan Library</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mpra-scan-results" class="d-none">
+                <p class="text-muted small">Hover scan hits (top panel) to highlight the correlated region. Double-click a hit to select that protein for comparison (bottom panel). Use the PFAM toggle to group hits.</p>
+            </div>
+        </div>
+
+        <div id="mpra-global-loading" class="d-none text-center fs-4 fw-bold position-fixed top-50 start-50">
+            Loading<span>...</span>
+        </div>
+    </div>
+
+    {% include 'footer.html' %}
+
+    <script type="module" src="{{ url_for('static', filename='mpra.js') }}"></script>
+</body>
+</html>
