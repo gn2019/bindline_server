@@ -204,9 +204,9 @@ function renderSinglePlot(plotData) {
     const combinedDiv = UTILS.getElementByIdOrThrow('mpra-combined-plot');
     const [traces] = createAllMutantsTraces(plotData);
     // assign to bottom y-axis
-    const singleTraces = traces.map(t => (t.yaxis = 'y3', t));
+    const singleTraces = traces.map(t => (t.yaxis = 'y4', t));
     combinedDiv._singleTraces = singleTraces;
-    combinedDiv._singleTitle = `Predicted Effect - ${plotData.score_file}`;
+    combinedDiv._singleTitle = `Predicted Effect\n${plotData.score_file}`;
 
     // Use correlation from backend if available
     if (plotData.correlation_positions && plotData.correlation_values) {
@@ -216,7 +216,7 @@ function renderSinglePlot(plotData) {
             mode: 'lines',
             line: { color: 'purple', width: 2 },
             name: 'MPRA-Protein Correlation',
-            yaxis: 'y2',
+            yaxis: 'y3',
             hovertemplate: 'pos %{x}: r=%{y:.3f}<extra></extra>',
         }];
     } else {
@@ -236,22 +236,24 @@ function updateCombinedPlot() {
     const corr = div._corrTraces || [];
     const single = div._singleTraces || [];
 
-    // Ensure corr traces use MPRA y-axis (yaxis2) so they overlay MPRA
-    corr.forEach(t => t.yaxis = 'y2');
+    // Ensure corr traces use MPRA y-axis (yaxis3) so they between MPRA and sample
+    corr.forEach(t => t.yaxis = 'y3');
 
     const traces = [...scan, ...mpra, ...corr, ...single];
 
     const layout = {
         template: 'plotly_white',
+        uirevision: 'static',
         margin: { t: 90, b: 40, l: 50, r: 20 },
-        xaxis: { title: { text: 'Position' } },
+        xaxis: { title: { text: 'Position' }, fixedrange: false },
         yaxis: {
             domain: [0.72, 0.96], title: { text: 'Binding site hits' },
             showticklabels: false, showgrid: false, zeroline: false,
             range: [-0.6, scanNumLevels - 0.4],
         },
-        yaxis2: { domain: [0.36, 0.68], title: { text: 'MPRA (value)' }, showticklabels: true },
-        yaxis3: { domain: [0.02, 0.30], title: { text: div._singleTitle || 'Predicted Effect' }, showticklabels: true },
+        yaxis2: { domain: [0.36, 0.68], title: { text: 'MPRA' }, showticklabels: true },
+        yaxis3: { domain: [0.305, 0.3595], title: { text: 'Corr.' }, showticklabels: true, showgrid: false, tickvals: [-1, 0, 1] },
+        yaxis4: { domain: [0.02, 0.3], title: { text: div._singleTitle?.replace('\n', '<br>') || 'Predicted Effect' }, showticklabels: true },
         legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.16, title: { text: 'PFAM' } },
         height: div.style && div.style.height ? parseInt(div.style.height) : 640,
     };
@@ -418,7 +420,7 @@ function renderScanTable(scanData, fileNameToId) {
 
 async function loadHitDetail(fileId) {
     const mpraData = getMpraData();
-    showGlobalLoading();
+    showGlobalLoading(false);
     const formData = new FormData();
     formData.append('ref_name', mpraData.seq_name);
     formData.append('ref_sequence', mpraData.ref_sequence);

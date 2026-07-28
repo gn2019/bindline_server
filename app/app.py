@@ -502,7 +502,7 @@ def find_significant_mutations():
                 del binding_sites[score_file][name][i]
 
         # create MPRA-like data
-        mutants_effect, ref_effect = get_all_mutants_effect(aligned_scores[score_file], sequences, ref_name, mer=table.mer)
+        mutants_effect, ref_effect, _effect_matrix = get_all_mutants_effect(aligned_scores[score_file], sequences, ref_name, mer=table.mer)
         curr_binding_sites = binding_sites[score_file]
         for name in sequences.keys():
             if name == ref_name:
@@ -767,7 +767,7 @@ def mpra_single_():
         else:
             _, _, aligned_scores[name] = align_scores_by_name(name, sequence_str, sequence_scores)
 
-    mutants_effect, ref_effect = get_all_mutants_effect(aligned_scores, sequences, ref_name, mer=table.mer)
+    mutants_effect, ref_effect, effect_matrix = get_all_mutants_effect(aligned_scores, sequences, ref_name, mer=table.mer)
 
     # Compute full-sequence correlation using scan parameters (if provided)
     correlation_positions = []
@@ -782,7 +782,7 @@ def mpra_single_():
         if variants:  # Only compute if we have MPRA data
             exp_matrix = build_mpra_exp_matrix(ref_sequence, variants)
             correlation_positions, correlation_values = compute_full_sequence_correlation(
-                ref_sequence, exp_matrix, ref_effect, window_size, alpha
+                ref_sequence, exp_matrix, effect_matrix, window_size, alpha
             )
     except Exception as e:
         print(f"Warning: Could not compute correlation: {e}")

@@ -1325,13 +1325,15 @@ function hideThresholds() {
 
 let loadingInterval;
 
-export function showGlobalLoading() {
+export function showGlobalLoading(scrollToTop = true) {
     const loadingDiv = document.getElementById("global-loading");
     const loadingDots = document.getElementById("loading-dots");
     if (!loadingDiv || !loadingDots) return;
 
     loadingDiv.classList.remove("d-none"); // Show loading message
-    window.scrollTo({top: 0, behavior: "smooth"}); // Scroll to top smoothly
+    if (scrollToTop) {
+        window.scrollTo({top: 0, behavior: "smooth"}); // Scroll to top smoothly
+    }
 
     let dotCount = 0;
 

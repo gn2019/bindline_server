@@ -223,6 +223,18 @@ def sliding_max(scores, mer):
 
 
 def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
+    """
+    Returns (mutants_effect, ref_effect, effect_matrix):
+    - mutants_effect: list (one entry per position) of {base: delta_score} dicts, for
+      display purposes (e.g. rendered in a table in the UI).
+    - ref_effect: the reference sequence's own baseline score per position (shape (n,)).
+      This is NOT a per-alt-base effect and must not be correlated against MPRA data
+      directly (see effect_matrix below / compute_full_sequence_correlation).
+    - effect_matrix: dense (n, 3) array with the same per-alt-base delta effect as
+      mutants_effect, in ACGT order excluding the reference base per position -- i.e.
+      the same layout as build_mpra_exp_matrix's output and as tf_window_hits' internal
+      `effects`. This is the array that should be correlated against MPRA data.
+    """
     ref_scores = aligned_scores[ref_name]
     ref_effect = sliding_max(ref_scores, mer)
 
@@ -238,13 +250,16 @@ def get_all_mutants_effect(aligned_scores, sequences, ref_name, mer):
         mut_pos = int(mut[-3])
         # for each position, take the max of mer scores
         effects[mut_pos, letters_to_index[mut_base]] = max(scores[max(mut_pos-mer+1, 0):mut_pos+1])
-    df = pd.DataFrame(columns=['A', 'C', 'G', 'T'])
     ref_seq = sequences[ref_name]
+    delta = effects - ref_effect[:, None]
+    effect_matrix = drop_ref_base_column(delta, ref_seq)
+
+    df = pd.DataFrame(columns=['A', 'C', 'G', 'T'])
     for i in range(len(ref_seq)):
-        df.loc[i] = effects[i] - ref_effect[i]
+        df.loc[i] = delta[i]
     mutants_effect = df.to_dict(orient='index')
     mutants_effect = [{k: v for k, v in mutants_effect[pos].items() if k != ref_seq[pos]} for pos in range(len(mutants_effect))]
-    return mutants_effect, ref_effect.tolist()
+    return mutants_effect, ref_effect.tolist(), effect_matrix
 
 
 def find_highest_values_and_binding_sites(aligned_scores, aligned_positions, sequences, ref_name,
@@ -323,6 +338,29 @@ def parse_mpra_dataframe(df):
     return ref_sequence, variants
 
 
+def drop_ref_base_column(matrix, ref_sequence):
+    """
+    Given a dense (len(ref_sequence), 4) matrix in ACGT column order, drop the column
+    corresponding to the reference base at each position, returning a (len(ref_sequence), 3)
+    matrix. This is the shared "ACGT order excluding the reference base" layout used
+    throughout the codebase for per-position, per-alt-base data: build_mpra_exp_matrix's
+    experimental effect matrix, get_all_mutants_effect's predicted effect matrix, and
+    tf_window_hits' internal per-alt-base effects all use this same layout, which is what
+    makes them directly comparable/correlatable.
+    """
+    letters_to_index = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+    matrix = np.asarray(matrix)
+    filtered = []
+    for i, row in enumerate(matrix):
+        ref = ref_sequence[i]
+        if ref not in letters_to_index:
+            raise ValueError(f"Invalid reference base '{ref}' at position {i} of the reference sequence.")
+        row = row.tolist()
+        row.pop(letters_to_index[ref])
+        filtered.append(row)
+    return np.vstack(filtered)
+
+
 def build_mpra_exp_matrix(ref_sequence, variants):
     """
     Build the (len(ref_sequence), 3) experimental effect matrix used for correlating
@@ -336,15 +374,63 @@ def build_mpra_exp_matrix(ref_sequence, variants):
             continue
         exp_matrix[v['position'], letters_to_index[v['alt']]] = v['value']
 
-    filtered = []
-    for i, row in enumerate(exp_matrix):
-        ref = ref_sequence[i]
-        if ref not in letters_to_index:
-            raise ValueError(f"Invalid reference base '{ref}' at position {i} of the reference sequence.")
-        row = row.tolist()
-        row.pop(letters_to_index[ref])
-        filtered.append(row)
-    return np.vstack(filtered)
+    return drop_ref_base_column(exp_matrix, ref_sequence)
+
+
+def windowed_effect_correlation(effects, T, w, alpha=0.3):
+    """
+    Shared core used by BOTH tf_window_hits (scan) and compute_full_sequence_correlation
+    (MPRA page) so the two can never silently compute different things again.
+
+    Slides a window of size `w` and computes, for every "track" (row) in `effects`, a
+    magnitude-weighted correlation between that track's predicted per-alt-base effect
+    and the experimental effect matrix `T`.
+
+    Parameters
+    ----------
+    effects : (m, n, 3) array
+        Predicted per-position, per-alt-base delta effect (ACGT order excluding the
+        reference base per position) for m tracks. m is the number of TFs when called
+        from tf_window_hits, or 1 when called from compute_full_sequence_correlation
+        for a single TF/track.
+    T : (n, 3) array
+        Experimental (e.g. MPRA) effect matrix, same ACGT-minus-ref layout as `effects`.
+    w : int
+        Window size.
+    alpha : float
+        Weight of the magnitude-weighted sign-agreement term.
+
+    Returns
+    -------
+    r, sign_score, score : each (m, n - w + 1), or (m, 0) if n < w
+        r is the plain (z-scored) Pearson-style correlation per window.
+        sign_score is the magnitude-weighted sign agreement per window.
+        score = r + alpha * |sign_score| is the combined value used for thresholding.
+    """
+    effects = np.asarray(effects)
+    T = np.asarray(T)
+    m, n, _ = effects.shape
+    L = 3 * w
+
+    if n - w + 1 <= 0:
+        empty = np.empty((m, 0), dtype=np.result_type(effects.dtype, T.dtype))
+        return empty, empty, empty
+
+    Tw = sliding_window_view(T, (w, 3)).reshape(n - w + 1, L).copy()
+    Tw_z = (Tw - Tw.mean(axis=1, keepdims=True)) / (Tw.std(axis=1, keepdims=True) + 1e-8)
+
+    Ew_all = sliding_window_view(effects, (1, w, 3)).copy()
+    Ew_all = Ew_all.reshape(m, n - w + 1, L)
+    Ew_z = (Ew_all - Ew_all.mean(axis=2, keepdims=True)) / (Ew_all.std(axis=2, keepdims=True) + 1e-8)
+
+    r = (Ew_z * Tw_z[None, :, :]).mean(axis=2)   # (m, n-w+1)
+
+    wgt = np.abs(Tw[None, :, :])
+    sign_agree = np.sign(Ew_all * Tw[None, :, :])
+    sign_score = (sign_agree * wgt).sum(axis=2) / (wgt.sum(axis=2) + 1e-8)
+    score = (1 - alpha) * r + alpha * np.abs(sign_score)
+
+    return r, sign_score, score
 
 
 def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
@@ -421,23 +507,10 @@ def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
         effects[:, i, :] = alt_max - orig[:, i][:, None]
 
     # --- sliding correlation with magnitude-weighted sign gain ---
-    L = 3 * w
     if n - w + 1 <= 0:
         return []
 
-    Tw = sliding_window_view(T, (w, 3)).reshape(n - w + 1, L).copy()
-    Tw_z = (Tw - Tw.mean(axis=1, keepdims=True)) / (Tw.std(axis=1, keepdims=True) + 1e-8)
-
-    Ew_all = sliding_window_view(effects, (1, w, 3)).copy()
-    Ew_all = Ew_all.reshape(m, n - w + 1, L)
-    Ew_z = (Ew_all - Ew_all.mean(axis=2, keepdims=True)) / (Ew_all.std(axis=2, keepdims=True) + 1e-8)
-
-    r = (Ew_z * Tw_z[None, :, :]).mean(axis=2)   # (m, n-w+1)
-
-    wgt = np.abs(Tw[None, :, :])
-    sign_agree = np.sign(Ew_all * Tw[None, :, :])
-    sign_score = (sign_agree * wgt).sum(axis=2) / (wgt.sum(axis=2) + 1e-8)
-    score = r + alpha * np.abs(sign_score)
+    r, sign_score, score = windowed_effect_correlation(effects, T, w, alpha)
 
     altmax_all = effects + orig[:, :, None]
     Aw = sliding_window_view(altmax_all, (1, w, 3)).reshape(m, n - w + 1, w, 3)
@@ -449,7 +522,7 @@ def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
     for t in range(m):
         pos = np.where(mask[t])[0]
         if pos.size:
-            hits.append((t, pos, r[t, pos]))
+            hits.append((t, pos, score[t, pos]))
 
     return hits
 
@@ -517,17 +590,26 @@ def get_insertions(seq, start, end, aligned_positions):
             for match in re.finditer(r'[a-z]+', seq[start:end + 1])]
 
 
-def compute_full_sequence_correlation(ref_sequence, exp_matrix, ref_effect, window_size, alpha=0.3):
+def compute_full_sequence_correlation(ref_sequence, exp_matrix, effect_matrix, window_size, alpha=0.3):
     """
     Compute sliding-window correlation across the full sequence.
     Returns (positions, correlation_values) where:
     - positions: list of window start positions
     - correlation_values: list of correlation scores for each window
 
-    Uses the same correlation metric as tf_window_hits (magnitude-weighted sign agreement + Pearson r).
+    IMPORTANT: `effect_matrix` must be the (len(ref_sequence), 3) predicted per-alt-base
+    delta effect (ACGT order excluding the reference base per position) -- e.g. the
+    `effect_matrix` returned by get_all_mutants_effect(), NOT the scalar `ref_effect`
+    baseline score also returned by that function. A scalar per-position baseline has
+    no per-alt-base direction and cannot be meaningfully correlated against per-alt-base
+    MPRA data.
+
+    This calls the exact same windowed_effect_correlation() core that tf_window_hits
+    uses (with a single track, m=1), so the two are guaranteed to agree for the same
+    inputs and can't silently diverge again.
     """
     exp_matrix = np.array(exp_matrix, dtype=np.float32)
-    ref_effect = np.array(ref_effect, dtype=np.float32)
+    effect_matrix = np.array(effect_matrix, dtype=np.float32)
 
     n = len(ref_sequence)
     w = window_size
@@ -535,33 +617,20 @@ def compute_full_sequence_correlation(ref_sequence, exp_matrix, ref_effect, wind
     if n < w:
         return [], []
 
-    # Extract sliding windows of MPRA effects (shape: (n-w+1, w*3))
-    L = 3 * w
-    Tw = sliding_window_view(exp_matrix, (w, 3)).reshape(n - w + 1, L).copy()
-    Tw_z = (Tw - Tw.mean(axis=1, keepdims=True)) / (Tw.std(axis=1, keepdims=True) + 1e-8)
+    if effect_matrix.shape != (n, 3):
+        raise ValueError(
+            f"effect_matrix must have shape ({n}, 3) (per-alt-base delta effect, ACGT "
+            f"order excluding the reference base per position); got {effect_matrix.shape}. "
+            f"Did you pass the scalar `ref_effect` baseline instead of `effect_matrix`?"
+        )
 
-    # Compute predicted effects per position (from ref_effect sliding window)
-    # ref_effect is shape (n,), we take sliding windows of size w
-    ref_effect_windows = sliding_window_view(ref_effect, w).copy()  # (n-w+1, w)
+    # windowed_effect_correlation expects a (tracks, n, 3) array; we have a single track.
+    r, _sign_score, _score = windowed_effect_correlation(effect_matrix[None, :, :], exp_matrix, w, alpha)
 
-    # Expand to (n-w+1, w, 3) to match dimensions (broadcast across nucleotides)
-    ref_effect_expanded = np.repeat(ref_effect_windows[:, :, np.newaxis], 3, axis=2)  # (n-w+1, w, 3)
-    ref_effect_flat = ref_effect_expanded.reshape(n - w + 1, L)  # (n-w+1, L)
-    ref_effect_z = (ref_effect_flat - ref_effect_flat.mean(axis=1, keepdims=True)) / (ref_effect_flat.std(axis=1, keepdims=True) + 1e-8)
-
-    # Compute Pearson correlation per window
-    r = (ref_effect_z * Tw_z).mean(axis=1)  # (n-w+1,)
-
-    # Compute sign agreement score
-    wgt = np.abs(Tw)  # (n-w+1, L)
-    sign_agree = np.sign(ref_effect_expanded.reshape(n - w + 1, L) * Tw)  # (n-w+1, L)
-    sign_score = (sign_agree * wgt).sum(axis=1) / (wgt.sum(axis=1) + 1e-8)  # (n-w+1,)
-
-    # Combined score
-    score = r + alpha * np.abs(sign_score)  # (n-w+1,)
-
-    # Return positions (window starts) and scores
+    # Report the same quantity tf_window_hits reports for its hits (the raw, magnitude-
+    # weighted-by-z-scoring Pearson correlation `r`), so the scan and MPRA pages show
+    # directly comparable numbers for the same TF/window.
     positions = list(range(n - w + 1))
-    correlation_values = score.tolist()
+    correlation_values = _score[0].tolist()
 
     return positions, correlation_values
