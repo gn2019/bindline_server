@@ -769,14 +769,40 @@ def mpra_single_():
 
     mutants_effect, ref_effect = get_all_mutants_effect(aligned_scores, sequences, ref_name, mer=table.mer)
 
-    return jsonify({
+    # Compute full-sequence correlation using scan parameters (if provided)
+    correlation_positions = []
+    correlation_values = []
+    try:
+        variants = json.loads(request.form.get('variants', '[]'))
+        window_size = int(request.form.get('window_size', 5))
+        corr_threshold = float(request.form.get('corr_threshold', 0.85))
+        var_threshold = float(request.form.get('var_threshold', 0.35))
+        alpha = float(request.form.get('alpha', 0.3))
+
+        if variants:  # Only compute if we have MPRA data
+            exp_matrix = build_mpra_exp_matrix(ref_sequence, variants)
+            correlation_positions, correlation_values = compute_full_sequence_correlation(
+                ref_sequence, exp_matrix, ref_effect, window_size, alpha
+            )
+    except Exception as e:
+        print(f"Warning: Could not compute correlation: {e}")
+        traceback.print_exc()
+
+    result = {
         'ref_name': ref_name,
         'score_file': score_file,
         'sequence_strs': {ref_name: ref_sequence},
         'mutants_effect': mutants_effect,
         'ref_effect': ref_effect,
         'max_score': table.max_score(),
-    })
+    }
+
+    # Include correlation if available
+    if correlation_positions:
+        result['correlation_positions'] = correlation_positions
+        result['correlation_values'] = correlation_values
+
+    return jsonify(result)
 
 
 @app.route('/mpra/scan', methods=['POST'])

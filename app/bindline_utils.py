@@ -515,3 +515,53 @@ def get_insertions(seq, start, end, aligned_positions):
         (aligned_positions[match.start() + start] + aligned_positions[match.end() + start - 1]) / 2,
         seq[match.start() + start:match.end() + start].upper())
             for match in re.finditer(r'[a-z]+', seq[start:end + 1])]
+
+
+def compute_full_sequence_correlation(ref_sequence, exp_matrix, ref_effect, window_size, alpha=0.3):
+    """
+    Compute sliding-window correlation across the full sequence.
+    Returns (positions, correlation_values) where:
+    - positions: list of window start positions
+    - correlation_values: list of correlation scores for each window
+
+    Uses the same correlation metric as tf_window_hits (magnitude-weighted sign agreement + Pearson r).
+    """
+    exp_matrix = np.array(exp_matrix, dtype=np.float32)
+    ref_effect = np.array(ref_effect, dtype=np.float32)
+
+    n = len(ref_sequence)
+    w = window_size
+
+    if n < w:
+        return [], []
+
+    # Extract sliding windows of MPRA effects (shape: (n-w+1, w*3))
+    L = 3 * w
+    Tw = sliding_window_view(exp_matrix, (w, 3)).reshape(n - w + 1, L).copy()
+    Tw_z = (Tw - Tw.mean(axis=1, keepdims=True)) / (Tw.std(axis=1, keepdims=True) + 1e-8)
+
+    # Compute predicted effects per position (from ref_effect sliding window)
+    # ref_effect is shape (n,), we take sliding windows of size w
+    ref_effect_windows = sliding_window_view(ref_effect, w).copy()  # (n-w+1, w)
+
+    # Expand to (n-w+1, w, 3) to match dimensions (broadcast across nucleotides)
+    ref_effect_expanded = np.repeat(ref_effect_windows[:, :, np.newaxis], 3, axis=2)  # (n-w+1, w, 3)
+    ref_effect_flat = ref_effect_expanded.reshape(n - w + 1, L)  # (n-w+1, L)
+    ref_effect_z = (ref_effect_flat - ref_effect_flat.mean(axis=1, keepdims=True)) / (ref_effect_flat.std(axis=1, keepdims=True) + 1e-8)
+
+    # Compute Pearson correlation per window
+    r = (ref_effect_z * Tw_z).mean(axis=1)  # (n-w+1,)
+
+    # Compute sign agreement score
+    wgt = np.abs(Tw)  # (n-w+1, L)
+    sign_agree = np.sign(ref_effect_expanded.reshape(n - w + 1, L) * Tw)  # (n-w+1, L)
+    sign_score = (sign_agree * wgt).sum(axis=1) / (wgt.sum(axis=1) + 1e-8)  # (n-w+1,)
+
+    # Combined score
+    score = r + alpha * np.abs(sign_score)  # (n-w+1,)
+
+    # Return positions (window starts) and scores
+    positions = list(range(n - w + 1))
+    correlation_values = score.tolist()
+
+    return positions, correlation_values

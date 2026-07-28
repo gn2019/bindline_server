@@ -2,22 +2,11 @@ import * as UTILS from './utils.js';
 import { showToast, showToasts } from './toast.js';
 import {
     createAllMutantsTraces,
+    showGlobalLoading,
+    hideGlobalLoading,
     getAllMutantsPlotLayout,
-    createBindingSiteTraces,
-    getBindingSitesPlotLayout,
-    getColorPalettes,
-    hexToRGB,
-    groupPfamOnClick,
+    createBindingSiteBarTraces,
 } from './plot_utils.js';
-
-
-function showGlobalLoading() {
-    UTILS.getElementByIdOrThrow('mpra-global-loading').classList.remove('d-none');
-}
-
-function hideGlobalLoading() {
-    UTILS.getElementByIdOrThrow('mpra-global-loading').classList.add('d-none');
-}
 
 function handleError(error) {
     hideGlobalLoading();
@@ -190,6 +179,13 @@ async function compareSingleProtein() {
         formData.append('score_0', scoreFile.existingId);
     }
 
+    // Include scan parameters for correlation computation
+    formData.append('variants', JSON.stringify(mpraData.variants));
+    formData.append('window_size', UTILS.getElementByIdOrThrow('mpra-window-size').value);
+    formData.append('corr_threshold', UTILS.getElementByIdOrThrow('mpra-corr-threshold').value);
+    formData.append('var_threshold', UTILS.getElementByIdOrThrow('mpra-var-threshold').value);
+    formData.append('alpha', UTILS.getElementByIdOrThrow('mpra-alpha').value);
+
     await fetch('/mpra/single', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
@@ -211,13 +207,31 @@ function renderSinglePlot(plotData) {
     const singleTraces = traces.map(t => (t.yaxis = 'y3', t));
     combinedDiv._singleTraces = singleTraces;
     combinedDiv._singleTitle = `Predicted Effect - ${plotData.score_file}`;
+
+    // Use correlation from backend if available
+    if (plotData.correlation_positions && plotData.correlation_values) {
+        combinedDiv._corrTraces = [{
+            x: plotData.correlation_positions,
+            y: plotData.correlation_values,
+            mode: 'lines',
+            line: { color: 'purple', width: 2 },
+            name: 'MPRA-Protein Correlation',
+            yaxis: 'y2',
+            hovertemplate: 'pos %{x}: r=%{y:.3f}<extra></extra>',
+        }];
+    } else {
+        combinedDiv._corrTraces = [];
+    }
+
     updateCombinedPlot();
 }
 
-// Combined plot update: top = scan (yaxis), middle = MPRA (yaxis2), bottom = predicted effect (yaxis3)
+// Combined plot update: top = binding-site hit insets (yaxis + dynamic xaxisN/yaxisN),
+// middle = MPRA (yaxis2), bottom = predicted effect (yaxis3)
 function updateCombinedPlot() {
     const div = UTILS.getElementByIdOrThrow('mpra-combined-plot');
-    const scan = div._scanTraces || [];
+    const scan = div._scanTraces || []; // packed horizontal-bar traces (from createBindingSiteBarTraces)
+    const scanNumLevels = div._scanNumLevels || 1;
     const mpra = div._mpraTraces || [];
     const corr = div._corrTraces || [];
     const single = div._singleTraces || [];
@@ -229,11 +243,16 @@ function updateCombinedPlot() {
 
     const layout = {
         template: 'plotly_white',
-        margin: { t: 50, b: 40, l: 50, r: 20 },
+        margin: { t: 90, b: 40, l: 50, r: 20 },
         xaxis: { title: { text: 'Position' } },
-        yaxis: { domain: [0.72, 0.96], title: { text: 'Scan (hits)' }, showticklabels: true },
+        yaxis: {
+            domain: [0.72, 0.96], title: { text: 'Binding site hits' },
+            showticklabels: false, showgrid: false, zeroline: false,
+            range: [-0.6, scanNumLevels - 0.4],
+        },
         yaxis2: { domain: [0.36, 0.68], title: { text: 'MPRA (value)' }, showticklabels: true },
         yaxis3: { domain: [0.02, 0.30], title: { text: div._singleTitle || 'Predicted Effect' }, showticklabels: true },
+        legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.16, title: { text: 'PFAM' } },
         height: div.style && div.style.height ? parseInt(div.style.height) : 640,
     };
 
@@ -265,7 +284,6 @@ async function scanLibrary() {
     formData.append('var_threshold', UTILS.getElementByIdOrThrow('mpra-var-threshold').value);
     formData.append('alpha', UTILS.getElementByIdOrThrow('mpra-alpha').value);
 
-    console.log(22222, formData);
     await fetch('/mpra/scan', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
@@ -290,42 +308,12 @@ function renderScanResults(scanData) {
     }
 
     const mpraData = getMpraData();
-    // Build a "binding_sites"-shaped structure so we can reuse the existing plot code.
-    const seqName = mpraData.seq_name;
-    const binding_sites = {};
-    const gaps = {};
-    const insertions = {};
-
-    scanData.hits.forEach(hit => {
-        const fileName = scanData.file_meta[hit.file_id]?.filename || `file_${hit.file_id}`;
-        binding_sites[fileName] = binding_sites[fileName] || {};
-        gaps[fileName] = gaps[fileName] || {};
-        insertions[fileName] = insertions[fileName] || {};
-        binding_sites[fileName][seqName] = binding_sites[fileName][seqName] || [];
-        gaps[fileName][seqName] = [];
-        insertions[fileName][seqName] = [];
-
-        hit.positions.forEach((pos, i) => {
-            const start = pos;
-            const end = pos + scanData.window_size - 1;
-            binding_sites[fileName][seqName].push([start, end, '', start, end, true]);
-        });
-    });
-
-    const plotData = {
-        sequence_strs: { [seqName]: mpraData.ref_sequence },
-        binding_sites,
-        gaps,
-        insertions,
-        pfam_map: scanData.pfam_map,
-    };
-
     const combinedDiv = UTILS.getElementByIdOrThrow('mpra-combined-plot');
-    const [traces, yLabels] = createBindingSiteTraces(plotData);
-    // assign scan traces to top panel (yaxis)
-    const scanTraces = traces.map(t => (t.yaxis = 'y', t));
-    combinedDiv._scanTraces = scanTraces;
-    combinedDiv.sequence_str = plotData.sequence_strs[seqName];
+    combinedDiv.sequence_str = mpraData.ref_sequence;
+
+    const { traces, numLevels } = createBindingSiteBarTraces(scanData);
+    combinedDiv._scanTraces = traces;
+    combinedDiv._scanNumLevels = numLevels;
     // clear any previous correlation traces for this file until user selects
     combinedDiv._corrTraces = [];
 
@@ -348,16 +336,12 @@ function renderScanResults(scanData) {
             if (combinedDiv._handlersAttached) return;
             combinedDiv._lastClick = { key: null, time: 0 };
 
-            // Hover: highlight the scanned window region
+            // Hover: highlight the hit window this inset belongs to
             combinedDiv.on('plotly_hover', (e) => {
-                const pt = e.points[0];
-                const fileName = pt?.data?.file;
-                if (!fileName) return;
-                const xArr = pt.data.x;
-                const start = Array.isArray(xArr) ? xArr[0] : pt.x;
-                const end = Array.isArray(xArr) ? xArr[1] : pt.x;
+                const data = e.points[0]?.data;
+                if (!data || data.fileId === undefined) return;
                 const shape = [{
-                    type: 'rect', xref: 'x', yref: 'paper', x0: start, x1: end, y0: 0, y1: 1,
+                    type: 'rect', xref: 'x', yref: 'paper', x0: data.windowStart, x1: data.windowEnd, y0: 0, y1: 1,
                     fillcolor: 'rgba(200,200,200,0.25)', line: {width: 0}, layer: 'below'
                 }];
                 Plotly.relayout(combinedDiv, {shapes: shape});
@@ -369,35 +353,13 @@ function renderScanResults(scanData) {
 
             // Click-to-select: use native DOM click count (e.event.detail) to distinguish single vs double click
             combinedDiv.on('plotly_click', (e) => {
-                const pt = e.points[0];
-                const fileName = pt?.data?.file || pt?.data?.fileName;
-                if (!fileName) return;
-                const xArr = pt.data.x;
-                const start = Array.isArray(xArr) ? xArr[0] : pt.x;
-                const end = Array.isArray(xArr) ? xArr[1] : pt.x;
-
-                // Native click count: 1 = single, 2 = double, etc.
-                const clickCount = e.event && e.event.detail ? e.event.detail : 1;
-
-                if (clickCount === 2) {
-                    // native double-click -> select protein
-                    const fileId = combinedDiv._fileNameToId && combinedDiv._fileNameToId[fileName];
-                    if (fileId) loadHitDetail(fileId);
-                } else {
-                    // single-click: show highlight rectangle
-                    const shape = [{
-                        type: 'rect', xref: 'x', yref: 'paper', x0: start, x1: end, y0: 0, y1: 1,
-                        fillcolor: 'rgba(200,200,200,0.25)', line: {width: 0}, layer: 'below'
-                    }];
-                    Plotly.relayout(combinedDiv, {shapes: shape});
-                }
+                const data = e.points[0]?.data;
+                if (!data || data.fileId === undefined) return;
+                loadHitDetail(data.fileId);
             });
 
             combinedDiv._handlersAttached = true;
-
-            // Attach PFAM grouping-on-click behavior (use createBindingSiteTraces' pfam fields)
-            try { groupPfamOnClick(combinedDiv); } catch (e) { console.warn('groupPfamOnClick attach failed', e); }
-            };
+        };
 
         if (typeof combinedDiv.on === 'function') {
             attachHandlers();
@@ -463,6 +425,13 @@ async function loadHitDetail(fileId) {
     formData.append('file_type', getMpraFileType('mpra_scan_file_type'));
     formData.append('score_0', fileId);
 
+    // Include scan parameters for correlation computation
+    formData.append('variants', JSON.stringify(mpraData.variants));
+    formData.append('window_size', UTILS.getElementByIdOrThrow('mpra-window-size').value);
+    formData.append('corr_threshold', UTILS.getElementByIdOrThrow('mpra-corr-threshold').value);
+    formData.append('var_threshold', UTILS.getElementByIdOrThrow('mpra-var-threshold').value);
+    formData.append('alpha', UTILS.getElementByIdOrThrow('mpra-alpha').value);
+
     await fetch('/mpra/single', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
@@ -471,31 +440,6 @@ async function loadHitDetail(fileId) {
                 showToasts(data);
                 return;
             }
-            // Build correlation trace for this file if the scan data exists
-            try {
-                const combinedDiv = UTILS.getElementByIdOrThrow('mpra-combined-plot');
-                const lastScan = combinedDiv._lastScanData;
-                if (lastScan && Array.isArray(lastScan.hits)) {
-                    const fileId = Number(formData.get('score_0')) || null;
-                    // find matching hit (first) for this file
-                    const hit = lastScan.hits.find(h => Number(h.file_id) === fileId);
-                    if (hit) {
-                        combinedDiv._corrTraces = [{
-                            x: hit.positions,
-                            y: hit.scores,
-                            mode: 'lines+markers',
-                            line: { color: 'purple' },
-                            name: 'Correlation',
-                            yaxis: 'y2',
-                        }];
-                    } else {
-                        combinedDiv._corrTraces = [];
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to set correlation trace', e);
-            }
-
             renderSinglePlot(data);
             UTILS.getElementByIdOrThrow('mpra-combined-plot').scrollIntoView({ behavior: 'smooth', block: 'center' });
         })

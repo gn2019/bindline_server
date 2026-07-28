@@ -931,6 +931,119 @@ export function createBindingSiteTraces(plotData) {
 }
 
 
+// ---------------------------------------------------------------------------
+// "Packed bar" style binding-site visualization: each hit window is drawn as
+// a horizontal bar at its genomic position/extent, colored by PFAM group, and
+// packed into the minimum number of non-overlapping rows (instead of one
+// permanent row per TF/file, as createBindingSiteTraces does).
+// ---------------------------------------------------------------------------
+
+/**
+ * Greedily pack a list of {x0, x1, ...} intervals into the minimum number of
+ * non-overlapping vertical levels/rows. Direct port of the level-assignment
+ * loop in the Python find_mpra_corrs() script.
+ * Returns {intervals, numLevels}; each interval gets a `level` field attached
+ * (0 = bottom-most row). Input order is preserved in the output.
+ */
+export function packIntervalsIntoLevels(intervals) {
+    const sorted = intervals.map((iv, i) => ({...iv, _origIndex: i}));
+    sorted.sort((a, b) => a.x0 - b.x0);
+
+    const levelEnds = []; // last x1 assigned on each level
+    sorted.forEach(iv => {
+        let placed = false;
+        for (let lvl = 0; lvl < levelEnds.length; lvl++) {
+            if (iv.x0 > levelEnds[lvl]) { // no overlap with what's already on this level
+                levelEnds[lvl] = iv.x1;
+                iv.level = lvl;
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            iv.level = levelEnds.length;
+            levelEnds.push(iv.x1);
+        }
+    });
+
+    sorted.sort((a, b) => a._origIndex - b._origIndex);
+    sorted.forEach(iv => delete iv._origIndex);
+    return {intervals: sorted, numLevels: levelEnds.length};
+}
+
+/**
+ * Build horizontal-bar traces for every hit window in a /mpra/scan result,
+ * colored by PFAM group and packed into compact non-overlapping rows.
+ *
+ * scanData: the /mpra/scan response ({hits, file_meta, pfam_map, window_size})
+ * Returns {traces, numLevels} where traces includes both the bar traces
+ * (one per hit window, metadata attached for click/hover) and one dummy
+ * legend trace per PFAM group.
+ */
+export function createBindingSiteBarTraces(scanData) {
+    const hits = scanData.hits || [];
+    const fileMeta = scanData.file_meta || {};
+    const pfamMap = scanData.pfam_map || {};
+    const windowSize = scanData.window_size;
+    const colorPalettes = getColorPalettes();
+
+    const fileIdToFilename = {};
+    Object.entries(fileMeta).forEach(([id, meta]) => { fileIdToFilename[id] = meta.filename; });
+
+    // filename -> its (first) PFAM group name; files with no PFAM just use their own filename as the group
+    const filenameToPfam = {};
+    Object.entries(pfamMap).forEach(([pfamName, filenames]) => {
+        filenames.forEach(fn => { if (!filenameToPfam[fn]) filenameToPfam[fn] = pfamName; });
+    });
+
+    const pfamNames = Object.keys(pfamMap);
+    const pfamColor = {};
+    pfamNames.forEach((name, i) => {
+        pfamColor[name] = colorPalettes[i % colorPalettes.length][0];
+    });
+    const fallbackColors = colorPalettes.map(p => p[0]);
+    let fallbackIndex = 0;
+    const colorFor = (pfamName) => {
+        if (pfamColor[pfamName]) return pfamColor[pfamName];
+        return pfamColor[pfamName] = fallbackColors[(fallbackIndex++) % fallbackColors.length];
+    };
+
+    const flat = [];
+    hits.forEach(hit => {
+        const filename = fileIdToFilename[hit.file_id] || `file_${hit.file_id}`;
+        const pfamName = filenameToPfam[filename] || filename;
+        hit.positions.forEach((pos, i) => {
+            const score = hit.scores[i];
+            const end = pos + windowSize - 1;
+            flat.push({x0: pos, x1: end, pos, end, score, fileId: hit.file_id, filename, pfamName});
+        });
+    });
+
+    const {intervals: packed, numLevels} = packIntervalsIntoLevels(flat);
+
+    const barTraces = packed.map(iv => ({
+        x: [iv.pos, iv.end],
+        y: [iv.level, iv.level],
+        mode: 'lines',
+        line: {color: `rgba(${hexToRGB(colorFor(iv.pfamName))}, 0.85)`, width: 8},
+        showlegend: false,
+        hovertemplate: `${iv.filename} (${iv.pfamName})<br>pos ${iv.pos}-${iv.end}<br>score ${iv.score.toFixed(2)}<extra></extra>`,
+        fileId: iv.fileId, windowStart: iv.pos, windowEnd: iv.end,
+    }));
+
+    const legendTraces = pfamNames.map(name => ({
+        x: [null], y: [null], mode: 'lines',
+        line: {color: colorFor(name), width: 8},
+        name,
+        legendgroup: `pfam-${name}`,
+        showlegend: true,
+    }));
+
+    return {traces: [...barTraces, ...legendTraces], numLevels};
+}
+
+
+
 // Helper function to convert a hex color to RGB
 export function hexToRGB(hex) {
     const bigint = parseInt(hex.replace('#', ''), 16);
@@ -1212,7 +1325,7 @@ function hideThresholds() {
 
 let loadingInterval;
 
-function showGlobalLoading() {
+export function showGlobalLoading() {
     const loadingDiv = document.getElementById("global-loading");
     const loadingDots = document.getElementById("loading-dots");
     if (!loadingDiv || !loadingDots) return;
@@ -1229,7 +1342,7 @@ function showGlobalLoading() {
     }, 500);
 }
 
-function hideGlobalLoading() {
+export function hideGlobalLoading() {
     clearInterval(loadingInterval); // Stop animation
     const loadingDiv = document.getElementById("global-loading");
     if (loadingDiv) loadingDiv.classList.add("d-none"); // Hide message
