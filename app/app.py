@@ -1,7 +1,7 @@
 import itertools
 import os.path
 
-from flask import Flask, render_template, request, jsonify, Response, send_from_directory, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory, redirect, url_for, send_file, g
 from flask_cors import CORS
 from flask_login import LoginManager, login_required, current_user, user_logged_out
 import traceback
@@ -89,12 +89,23 @@ def dashboard():
 
 
 def update_mats(file):
+    """
+    Parse `file` as each of escore/zscore/iscore and update the user's matrices.
+
+    Returns a dict {score_type: error_message} for any score types that failed
+    to parse/update (empty dict if all succeeded, or if there was nothing to
+    update). Previously these failures were only printed via traceback and
+    swallowed, so e.g. a malformed file could update escore but silently skip
+    zscore/iscore with no indication to the caller that the file is now only
+    partially represented across the matrices.
+    """
     if file.file_type != files.FileType.SCORE or file.is_public or not current_user.is_authenticated:
-        return
+        return {}
 
     user_dict = load_user_identifiers()
     file_path = get_file_path(file)
     file_content = open(file_path).read()
+    errors = {}
     for score_type, tbl in {
         consts.ESCORE: bindline.UniProbeEScoreFile(file_content),
         consts.ZSCORE: bindline.UniProbeZScoreFile(file_content),
@@ -113,8 +124,19 @@ def update_mats(file):
         except Exception as e:
             traceback.print_exc()
             print(f"Error parsing {score_type} table for file {file.filename}: {e}")
+            errors[score_type] = str(e)
 
     load_user_identifiers(force=True)
+
+    if errors:
+        # Stash on flask.g so the enclosing route can surface it in the JSON
+        # response instead of it only ever showing up in server logs.
+        mat_warnings = getattr(g, 'mat_warnings', None)
+        if mat_warnings is None:
+            mat_warnings = g.mat_warnings = {}
+        mat_warnings[file.filename] = errors
+
+    return errors
 
 
 def update_file_pfams(stored_files, pfam_ids):
@@ -540,6 +562,9 @@ def find_significant_mutations():
         'export_url': None,
     }
     plot_data['export_url'] = export.export_data(plot_data, get_query_data(request))
+    mat_warnings = getattr(g, 'mat_warnings', None)
+    if mat_warnings:
+        plot_data['warnings'] = mat_warnings
 
     return Response(
         json.dumps(plot_data, allow_nan=False),
@@ -611,6 +636,9 @@ def upload_files_():
             'pfam_map': pfam_map,
         })
     plot_data['export_url'] = export.export_data(plot_data, get_query_data(request))
+    mat_warnings = getattr(g, 'mat_warnings', None)
+    if mat_warnings:
+        plot_data['warnings'] = mat_warnings
 
     return jsonify(plot_data)
 
@@ -622,16 +650,32 @@ def delete_file(*args, **kwargs):
 
 def delete_file_(file_id):
     file_metadata = files.get_file_by_id(file_id)
+    if not file_metadata:
+        return jsonify({'success': False, 'error': 'File not found or unauthorized'})
+
+    file_path = get_file_path(file_metadata)
+    file_existed = os.path.exists(file_path)
+
+    # Always clean up the matrix entry, regardless of whether the raw file is
+    # still on disk. Previously this only ran inside the `os.path.exists`
+    # branch below, so a missing raw file would leave an orphaned tf_id in the
+    # npy matrices after the DB row was deleted -- a desync that later surfaces
+    # as a crash in find_binding_sites (files.get_file_by_id returns None for
+    # a stale id, then `.filename` fails).
+    delete_from_mats(file_metadata)
+
     # delete from db
     files.delete_file(file_metadata.uuid)
-    # delete from disk
-    file_path = get_file_path(file_metadata)
-    if os.path.exists(file_path):
+
+    # delete from disk, if present
+    if file_existed:
         os.remove(file_path)
-        delete_from_mats(file_metadata)
         return jsonify({'success': True})
     else:
-        return jsonify({'success': False, 'error': 'File not found'})
+        return jsonify({
+            'success': False,
+            'error': 'File not found on disk; database and matrix entries were cleaned up.'
+        })
 
 
 def get_download_name(filename):

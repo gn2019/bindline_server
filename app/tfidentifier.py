@@ -30,6 +30,23 @@ def rolling_kmer_indices(enc, k):
     return (windows * pows).sum(axis=1)
 
 
+def _atomic_save(path: Path, arr: np.ndarray):
+    """
+    Write an .npy file atomically: save to a temp file in the same directory,
+    then os.replace() it into place. A plain np.save() can be left truncated
+    if the process dies mid-write (disk full, kill -9, crash); since every
+    matrix here is paired with a same-shaped ids array that must stay
+    row-aligned with it, a half-written file is exactly the kind of thing
+    that turns into a silent mat/ids mismatch later. os.replace() is atomic
+    on both POSIX and Windows as long as source and destination are on the
+    same filesystem, which they are here (same parent directory).
+    """
+    path = Path(path)
+    tmp_path = path.parent / f"{path.stem}.tmp{os.getpid()}.npy"
+    np.save(tmp_path, arr)
+    os.replace(tmp_path, path)
+
+
 class TFIdentifier:
     """
     Multi-mer vectoric TFIdentifier
@@ -69,20 +86,50 @@ class TFIdentifier:
             rank_ids_files={int(p.stem.split('_')[0]): p.name for p in self._ranks_folder.glob("*_rank_ids.npy")},
         )
 
+    @staticmethod
+    def _load_pair(folder, mat_fname, ids_fname, label, k):
+        """
+        Load a (matrix, ids) pair and verify they're still row-aligned. The
+        two are always saved as separate .npy files, so nothing on disk
+        enforces that they stay in sync -- a crash between the two writes,
+        a manual edit, or a stray file from an old migration script can leave
+        them mismatched. Loading that silently (rather than erroring) would
+        mean every TF id after the mismatch point gets attributed to the
+        wrong row, which is worse than a loud failure at startup.
+        """
+        mat_path = folder / mat_fname
+        ids_path = folder / ids_fname
+        mat = np.load(mat_path)
+        ids = np.load(ids_path)
+        if mat.shape[0] != ids.shape[0]:
+            raise ValueError(
+                f"Mismatched {label} matrix/ids for k={k} in {folder}: "
+                f"{mat_path.name} has {mat.shape[0]} rows but {ids_path.name} has "
+                f"{ids.shape[0]} ids. These files must stay row-aligned; this usually "
+                f"means one was written without the other (e.g. an interrupted save)."
+            )
+        return mat, ids
+
     def _load_matrices(self, abs_files, abs_ids_files, rank_files, rank_ids_files):
         # Load absolute matrices
         for k, fname in abs_files.items():
-            mat_path = self._abs_folder / fname
-            ids_path = self._abs_folder / abs_ids_files[k]
-            self.abs_mat[k] = np.load(mat_path)
-            self.abs_ids[k] = np.load(ids_path)
+            if k not in abs_ids_files:
+                raise ValueError(
+                    f"Found {fname} in {self._abs_folder} but no matching "
+                    f"{k}_abs_ids.npy -- the ids file for k={k} is missing."
+                )
+            self.abs_mat[k], self.abs_ids[k] = self._load_pair(
+                self._abs_folder, fname, abs_ids_files[k], 'abs', k)
             self.kmers.add(k)
         # Load rank matrices
         for k, fname in rank_files.items():
-            mat_path = self._ranks_folder / fname
-            ids_path = self._ranks_folder / rank_ids_files[k]
-            self.rank_mat[k] = np.load(mat_path)
-            self.rank_ids[k] = np.load(ids_path)
+            if k not in rank_ids_files:
+                raise ValueError(
+                    f"Found {fname} in {self._ranks_folder} but no matching "
+                    f"{k}_rank_ids.npy -- the ids file for k={k} is missing."
+                )
+            self.rank_mat[k], self.rank_ids[k] = self._load_pair(
+                self._ranks_folder, fname, rank_ids_files[k], 'rank', k)
             self.kmers.add(k)
 
     def _prepare_thresholds(self, abs_thr, rank_thr):
@@ -201,8 +248,8 @@ class TFIdentifier:
             self.abs_ids[k] = np.append(self.abs_ids.get(k, []), abs_ids)
             if should_save:
                 os.makedirs(self._abs_folder, exist_ok=True)
-                np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
-                np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+                _atomic_save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+                _atomic_save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
 
             if should_update_ranks:
                 rank_vectors = np.vstack(temp_rank_mat[k])
@@ -211,8 +258,8 @@ class TFIdentifier:
                 self.rank_ids[k] = np.append(self.rank_ids.get(k, []), rank_ids)
                 if should_save:
                     os.makedirs(self._ranks_folder, exist_ok=True)
-                    np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
-                    np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+                    _atomic_save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                    _atomic_save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
 
     def update(self, tf_id: int, table: 'bindline.EScoreTable', should_update_ranks: bool = False, should_save: bool = True):
@@ -237,8 +284,8 @@ class TFIdentifier:
         self.abs_ids[k] = np.append(self.abs_ids.get(k, []), tf_id)
         if should_save:
             os.makedirs(self._abs_folder, exist_ok=True)
-            np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
-            np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+            _atomic_save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+            _atomic_save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
         # Update rank matrix
         if should_update_ranks:
             rank_vector = np.argsort(np.argsort(abs_vector))
@@ -246,8 +293,8 @@ class TFIdentifier:
             self.rank_ids[k] = np.append(self.rank_ids.get(k, []), tf_id)
             if should_save:
                 os.makedirs(self._ranks_folder, exist_ok=True)
-                np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
-                np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+                _atomic_save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                _atomic_save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
 
     def remove_many(self, tf_ids: list, should_update_ranks: bool = False, should_save: bool = True):
@@ -275,8 +322,8 @@ class TFIdentifier:
                         (self._abs_folder / f"{k}_abs_ids.npy").unlink(missing_ok=True)
                         self.kmers.discard(k)
                     else:
-                        np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
-                        np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+                        _atomic_save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+                        _atomic_save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
             if should_update_ranks and k in self.rank_ids and tf_id in self.rank_ids[k]:
                 ranks_idx = np.where(self.rank_ids[k] == tf_id)[0][0]
                 self.rank_mat[k] = np.delete(self.rank_mat[k], ranks_idx, axis=0)
@@ -288,8 +335,8 @@ class TFIdentifier:
                         (self._ranks_folder / f"{k}_rank_ids.npy").unlink(missing_ok=True)
                         self.kmers.discard(k)
                     else:
-                        np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
-                        np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+                        _atomic_save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                        _atomic_save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
     def save(self, should_save_ranks: bool = False):
         """
@@ -298,14 +345,14 @@ class TFIdentifier:
         os.makedirs(self._abs_folder, exist_ok=True)
         for k in self.kmers:
             if k in self.abs_mat:
-                np.save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
-                np.save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
+                _atomic_save(self._abs_folder / f"{k}_abs.npy", self.abs_mat[k])
+                _atomic_save(self._abs_folder / f"{k}_abs_ids.npy", self.abs_ids[k])
         if should_save_ranks:
             os.makedirs(self._ranks_folder, exist_ok=True)
             for k in self.kmers:
                 if k in self.rank_mat:
-                    np.save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
-                    np.save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
+                    _atomic_save(self._ranks_folder / f"{k}_rank.npy", self.rank_mat[k])
+                    _atomic_save(self._ranks_folder / f"{k}_rank_ids.npy", self.rank_ids[k])
 
     def copy(self):
         """
