@@ -972,19 +972,25 @@ export function packIntervalsIntoLevels(intervals) {
 }
 
 /**
- * Build horizontal-bar traces for every hit window in a /mpra/scan result,
- * colored by PFAM group and packed into compact non-overlapping rows.
+ * Build horizontal-bar traces for every merged hit run in a /mpra/scan
+ * result, colored by PFAM group and packed into compact non-overlapping
+ * rows.
  *
- * scanData: the /mpra/scan response ({hits, file_meta, pfam_map, window_size})
+ * scanData: the /mpra/scan response ({hits, file_meta, pfam_map,
+ * window_size}). Each entry in `hits` is already a merged run - the
+ * backend (merge_window_hits in bindline_utils.py) collapses a protein's
+ * consecutive-start-position sliding-window hits into one {file_id, start,
+ * end, score_min, score_max} run per contiguous stretch, so a gap in start
+ * positions (even if the resulting windows would visually overlap) still
+ * produces separate bars.
  * Returns {traces, numLevels} where traces includes both the bar traces
- * (one per hit window, metadata attached for click/hover) and one dummy
+ * (one per merged run, metadata attached for click/hover) and one dummy
  * legend trace per PFAM group.
  */
 export function createBindingSiteBarTraces(scanData) {
     const hits = scanData.hits || [];
     const fileMeta = scanData.file_meta || {};
     const pfamMap = scanData.pfam_map || {};
-    const windowSize = scanData.window_size;
     const colorPalettes = getColorPalettes();
 
     const fileIdToFilename = {};
@@ -1008,28 +1014,30 @@ export function createBindingSiteBarTraces(scanData) {
         return pfamColor[pfamName] = fallbackColors[(fallbackIndex++) % fallbackColors.length];
     };
 
-    const flat = [];
-    hits.forEach(hit => {
+    const flat = hits.map(hit => {
         const filename = fileIdToFilename[hit.file_id] || `file_${hit.file_id}`;
         const pfamName = filenameToPfam[filename] || filename;
-        hit.positions.forEach((pos, i) => {
-            const score = hit.scores[i];
-            const end = pos + windowSize - 1;
-            flat.push({x0: pos, x1: end, pos, end, score, fileId: hit.file_id, filename, pfamName});
-        });
+        return { x0: hit.start, x1: hit.end, ...hit, filename, pfamName };
     });
+    // sort by pfamName
+    const flatByPfam = flat.sort((a, b) => a.pfamName.localeCompare(b.pfamName));
 
-    const {intervals: packed, numLevels} = packIntervalsIntoLevels(flat);
+    const {intervals: packed, numLevels} = packIntervalsIntoLevels(flatByPfam);
 
-    const barTraces = packed.map(iv => ({
-        x: [iv.pos, iv.end],
-        y: [iv.level, iv.level],
-        mode: 'lines',
-        line: {color: `rgba(${hexToRGB(colorFor(iv.pfamName))}, 0.85)`, width: 8},
-        showlegend: false,
-        hovertemplate: `${iv.filename} (${iv.pfamName})<br>pos ${iv.pos}-${iv.end}<br>score ${iv.score.toFixed(2)}<extra></extra>`,
-        fileId: iv.fileId, windowStart: iv.pos, windowEnd: iv.end,
-    }));
+    const barTraces = packed.map(iv => {
+        const scoreText = iv.score_min === iv.score_max
+            ? iv.score_min.toFixed(2)
+            : `${iv.score_min.toFixed(2)}-${iv.score_max.toFixed(2)}`;
+        return {
+            x: [iv.start, iv.end],
+            y: [iv.level, iv.level],
+            mode: 'lines',
+            line: {color: `rgba(${hexToRGB(colorFor(iv.pfamName))}, 0.85)`, width: 8},
+            showlegend: false,
+            hovertemplate: `${iv.filename} (${iv.pfamName})<br>pos ${iv.start}-${iv.end}<br>score ${scoreText}<extra></extra>`,
+            fileId: iv.file_id, windowStart: iv.start, windowEnd: iv.end,
+        };
+    });
 
     const legendTraces = pfamNames.map(name => ({
         x: [null], y: [null], mode: 'lines',
@@ -1037,6 +1045,7 @@ export function createBindingSiteBarTraces(scanData) {
         name,
         legendgroup: `pfam-${name}`,
         showlegend: true,
+        _legendEntry: true,
     }));
 
     return {traces: [...barTraces, ...legendTraces], numLevels};
@@ -1122,12 +1131,14 @@ export function createAllMutantsTraces(plotData) {
             symbol: nucleotideShapes[nucleotide], color: "rgba(0,0,0,0)", opacity: 1, size: 12,
             line: {color: "black", width: 2}
         },
-        name: `Ref nucleotide: ${nucleotide}`
+        name: `Ref nucleotide: ${nucleotide}`,
+        _legendEntry: true, _legendKind: 'ref-shape', _legendKey: nucleotide,
     }));
     const colorTraces = Object.keys(nucleotideColors).map(nucleotide => ({
         x: [null], y: [null], mode: "markers",
         marker: {symbol: "circle", color: nucleotideColors[nucleotide], size: 12},
-        name: `Mutant nucleotide: ${nucleotide}`
+        name: `Mutant nucleotide: ${nucleotide}`,
+        _legendEntry: true, _legendKind: 'nt-color', _legendKey: nucleotide,
     }));
 
     // Combine all traces

@@ -527,6 +527,62 @@ def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
     return hits
 
 
+def merge_window_hits(hits, window_size):
+    """
+    Merge per-protein sliding-window hits into contiguous runs, so the
+    binding-site plot can draw one bar per run instead of one per window.
+
+    `hits` is a list of dicts as built in mpra_scan_ (each with 'file_id',
+    'positions' - window start positions - and 'scores', one score per
+    position). A single protein (file_id) can appear in multiple `hits`
+    entries (once per k-mer length scanned), so positions/scores are first
+    pooled per file_id across all of them before merging.
+
+    Windows merge only when their *start positions* are consecutive
+    integers - e.g. with window_size 5, starts 1, 2, 3 (ranges 1-5, 2-6,
+    3-7) merge into one run 1-7, but a hit at start 5 (range 5-9) stays a
+    separate run unless start 4 is *also* a hit for that same protein, even
+    though 3-7 and 5-9 would otherwise visually overlap.
+
+    Returns a list of {'file_id', 'start', 'end', 'score_min', 'score_max'}
+    dicts, one per merged run, sorted by (file_id, start).
+    """
+    positions_by_file = {}
+    for hit in hits:
+        pos_scores = positions_by_file.setdefault(hit['file_id'], [])
+        pos_scores.extend(zip(hit['positions'], hit['scores']))
+
+    merged = []
+    for file_id, pos_scores in positions_by_file.items():
+        pos_scores.sort(key=lambda ps: ps[0])
+        run_start = run_end = run_min = run_max = None
+        for pos, score in pos_scores:
+            if run_start is None:
+                run_start = run_end = pos
+                run_min = run_max = score
+            elif pos == run_end:
+                # duplicate position from another k-mer-length pass
+                run_min, run_max = min(run_min, score), max(run_max, score)
+            elif pos == run_end + 1:
+                run_end = pos
+                run_min, run_max = min(run_min, score), max(run_max, score)
+            else:
+                merged.append({
+                    'file_id': file_id, 'start': run_start, 'end': run_end + window_size - 1,
+                    'score_min': run_min, 'score_max': run_max,
+                })
+                run_start = run_end = pos
+                run_min = run_max = score
+        if run_start is not None:
+            merged.append({
+                'file_id': file_id, 'start': run_start, 'end': run_end + window_size - 1,
+                'score_min': run_min, 'score_max': run_max,
+            })
+
+    merged.sort(key=lambda r: (r['file_id'], r['start']))
+    return merged
+
+
 def get_pfam_map(score_file_ids):
     """
     return a map from pfam_name to protein files

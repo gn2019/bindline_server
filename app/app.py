@@ -850,8 +850,13 @@ def mpra_scan_():
 
     pfam_map = get_pfam_map(unq_file_ids)
 
+    # Merge each protein's individual sliding-window hits into contiguous
+    # runs (see merge_window_hits) before sending to the frontend, so the
+    # binding-site plot can draw one bar per run instead of one per window.
+    merged_hits = merge_window_hits(hits, window_size)
+
     return jsonify({
-        'hits': hits,
+        'hits': merged_hits,
         'file_meta': file_meta,
         'pfam_map': pfam_map,
         'window_size': window_size,

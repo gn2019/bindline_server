@@ -55,8 +55,13 @@ async function loadMpraData() {
             const mpraTraces = createMpraExperimentalTraces(div.mpraData.ref_sequence, div.mpraData.variants).map(t => (t.yaxis = 'y2', t));
             div._mpraTraces = mpraTraces;
             div.sequence_str = div.mpraData.ref_sequence;
-            updateCombinedPlot();
+            // Unhide the results wrapper *before* creating the plot: Plotly
+            // measures the container's width at Plotly.newPlot() time, and
+            // an ancestor with display:none (the 'd-none' class) reports a
+            // width of 0, which is why the plot used to render far narrower
+            // than the page until a later resize/redraw happened to fix it.
             UTILS.getElementByIdOrThrow('mpra-results').classList.remove('d-none');
+            updateCombinedPlot();
         })
         .catch(handleError);
 }
@@ -97,20 +102,29 @@ function createMpraExperimentalTraces(refSequence, variants) {
         });
     });
 
-    // Legend helpers, matching the style used for the "All Mutants" plot
+    // Legend helpers, matching the style used for the "All Mutants" plot.
+    // _legendKind/_legendKey identify what a legend entry *means* (not just
+    // its label text), so the combined plot can recognize when this and the
+    // predicted-effect legend are showing the same A/C/G/T mapping and only
+    // keep one - even though their trace names differ ("Alt" vs "Mutant").
+    // Names are short (just "A", "< 0.05", ...) because each group now has
+    // its own titled sub-legend (see LEGEND_KIND_TO_ID in updateCombinedPlot),
+    // so the "Ref nucleotide:" / "P-Value" style prefixes would be redundant.
     const shapeTraces = Object.keys(nucleotideShapes).map(nuc => ({
         x: [null], y: [null], mode: 'markers',
         marker: { symbol: nucleotideShapes[nuc], color: 'rgba(0,0,0,0)', opacity: 1, size: 12, line: { color: 'black', width: 2 } },
-        name: `Ref nucleotide: ${nuc}`,
+        name: nuc,
+        _legendEntry: true, _legendKind: 'ref-shape', _legendKey: nuc,
     }));
     const colorTraces = ['A', 'C', 'G', 'T'].map(nuc => ({
         x: [null], y: [null], mode: 'markers',
         marker: { symbol: 'circle', color: nucleotideColors[nuc], size: 12 },
-        name: `Alt nucleotide: ${nuc}`,
+        name: nuc,
+        _legendEntry: true, _legendKind: 'nt-color', _legendKey: nuc,
     }));
     const sigTraces = [
-        { x: [null], y: [null], mode: 'lines', line: { color: 'green' }, name: 'P-Value < 0.05' },
-        { x: [null], y: [null], mode: 'lines', line: { color: 'red' }, name: 'P-Value >= 0.05' },
+        { x: [null], y: [null], mode: 'lines', line: { color: 'green' }, name: '< 0.05', _legendEntry: true, _legendKind: 'pvalue', _legendKey: 'lt' },
+        { x: [null], y: [null], mode: 'lines', line: { color: 'red' }, name: '>= 0.05', _legendEntry: true, _legendKind: 'pvalue', _legendKey: 'gte' },
     ];
 
     return [...lineTraces, ...markerTraces, ...shapeTraces, ...colorTraces, ...sigTraces];
@@ -169,10 +183,11 @@ async function compareSingleProtein() {
     }
 
     showGlobalLoading();
+    const fileType = getMpraFileType('mpra_file_type');
     const formData = new FormData();
     formData.append('ref_name', mpraData.seq_name);
     formData.append('ref_sequence', mpraData.ref_sequence);
-    formData.append('file_type', getMpraFileType('mpra_file_type'));
+    formData.append('file_type', fileType);
     if (scoreFile.uploaded) {
         formData.append('score', scoreFile.uploaded);
     } else {
@@ -194,19 +209,27 @@ async function compareSingleProtein() {
                 showToasts(data);
                 return;
             }
-            renderSinglePlot(data);
+            renderSinglePlot(data, fileType);
         })
         .catch(handleError);
 }
 
-function renderSinglePlot(plotData) {
+// escore/zscore/iscore (the values of the mpra_file_type / mpra_scan_file_type
+// radios) -> the single-letter label used in the 4th axis title.
+const SCORE_TYPE_LABELS = { escore: 'E', zscore: 'Z', iscore: 'I' };
+
+function renderSinglePlot(plotData, fileType) {
     // Add predicted-effect traces to the combined plot (bottom panel)
     const combinedDiv = UTILS.getElementByIdOrThrow('mpra-combined-plot');
     const [traces] = createAllMutantsTraces(plotData);
     // assign to bottom y-axis
     const singleTraces = traces.map(t => (t.yaxis = 'y4', t));
     combinedDiv._singleTraces = singleTraces;
-    combinedDiv._singleTitle = `Predicted Effect\n${plotData.score_file}`;
+    // Two lines: "Predicted {E/Z/I}-Score Effect" then the protein name, so
+    // the axis title stays short and predictable regardless of file name.
+    const scoreLabel = SCORE_TYPE_LABELS[fileType];
+    const titleLine1 = scoreLabel ? `Predicted ${scoreLabel}-Score Effect` : 'Predicted Effect';
+    combinedDiv._singleTitle = `${titleLine1}\n${plotData.score_file}`;
 
     // Use correlation from backend if available
     if (plotData.correlation_positions && plotData.correlation_values) {
@@ -215,9 +238,10 @@ function renderSinglePlot(plotData) {
             y: plotData.correlation_values,
             mode: 'lines',
             line: { color: 'purple', width: 2 },
-            name: 'MPRA-Protein Correlation',
+            name: 'MPRA vs. Protein',
             yaxis: 'y3',
             hovertemplate: 'pos %{x}: r=%{y:.3f}<extra></extra>',
+            _legendEntry: true, _legendKind: 'corr', _legendKey: 'corr',
         }];
     } else {
         combinedDiv._corrTraces = [];
@@ -239,32 +263,232 @@ function updateCombinedPlot() {
     // Ensure corr traces use MPRA y-axis (yaxis3) so they between MPRA and sample
     corr.forEach(t => t.yaxis = 'y3');
 
+    // Pin every trace to its own (x, y) axis pair - xaxis/xaxis2/xaxis3/xaxis4
+    // below all share the same range via `matches: 'x'` - so each stacked
+    // panel is an independent subplot. Previously every trace referenced
+    // the single shared 'xaxis' object while spanning four different
+    // y-axis domains; Plotly could only draw that one axis's ticks and
+    // "Position" title once, at whichever panel boundary it picked, which
+    // is why it ended up overlapping the Corr. panel instead of sitting
+    // under the bottom-most panel.
+    scan.forEach(t => t.xaxis = 'x');
+    mpra.forEach(t => t.xaxis = 'x2');
+    corr.forEach(t => t.xaxis = 'x3');
+    single.forEach(t => t.xaxis = 'x4');
+
     const traces = [...scan, ...mpra, ...corr, ...single];
+
+    // --- Legend routing -----------------------------------------------
+    // PFAM group entries (from the binding-site scan) go into the top
+    // legend. Every other legend-worthy trace is split into its own
+    // titled sub-legend by what it means (_legendKind) - ref shapes, alt
+    // colors, p-value lines, and correlation - instead of being crammed
+    // into one long horizontal legend. Traces are marked with
+    // `_legendEntry`/`_legendKind`/`_legendKey` at creation time so this
+    // routing survives across renders even though the underlying trace
+    // arrays are cached on the div.
+    const LEGEND_KIND_TO_ID = { 'ref-shape': 'legend2', 'nt-color': 'legend3', 'pvalue': 'legend4', 'corr': 'legend5' };
+    // Reset first, since a trace object can be re-used across multiple
+    // updateCombinedPlot() calls and may have been hidden as a duplicate
+    // on a previous render.
+    traces.forEach(t => {
+        if (!t._legendEntry) return;
+        t.showlegend = true;
+        const isPfamEntry = t.legendgroup && t.legendgroup.startsWith('pfam-');
+        t.legend = isPfamEntry ? 'legend' : (LEGEND_KIND_TO_ID[t._legendKind] || 'legend2');
+    });
+    // Collapse duplicate legend entries by semantic meaning (kind+key), not
+    // literal name - e.g. the MPRA "Alt" color legend and the
+    // predicted-effect "Mutant nucleotide" color legend encode the exact
+    // same A/C/G/T mapping and should never both appear, even though their
+    // trace names differ.
+    const seenLegendKeys = { legend: new Set(), legend2: new Set(), legend3: new Set(), legend4: new Set(), legend5: new Set() };
+    traces.forEach(t => {
+        if (!t._legendEntry) return;
+        const bucket = seenLegendKeys[t.legend];
+        const key = t._legendKind ? `${t._legendKind}:${t._legendKey}` : t.name;
+        if (bucket.has(key)) {
+            t.showlegend = false;
+        } else {
+            bucket.add(key);
+        }
+    });
+
+    // --- Axis layout -----------------------------------------------
+    // Only allocate vertical space to sections that actually have data;
+    // empty sections are hidden and their space is reclaimed by the rest.
+    // Weights are relative units, not fractions - a weight of 1 is worth
+    // AXIS_UNIT_HEIGHT px, so a section keeps roughly the same pixel
+    // height whether it's alone or stacked with others.
+    const AXIS_UNIT_HEIGHT = 40;
+    const marginTop = 90, marginBottom = 200;
+
+    // Binding site hits doesn't get a fixed weight like the other panels -
+    // it's sized by how many packed rows it actually has (ROW_HEIGHT_PX per
+    // row), capped at the MPRA panel's height so a hit map with lots of
+    // overlapping windows can grow up to - but never past - as tall as MPRA.
+    const MPRA_WEIGHT = 6;
+    const ROW_HEIGHT_PX = 18;
+    const bindingWeight = Math.min(MPRA_WEIGHT, (scanNumLevels * ROW_HEIGHT_PX) / AXIS_UNIT_HEIGHT);
+
+    const sectionDefs = [
+        {
+            hasData: scan.length > 0, weight: bindingWeight, axisName: 'yaxis', xAxisName: 'xaxis', title: 'Binding site hits',
+            extra: { showticklabels: false, showgrid: false, zeroline: false, range: [-0.6, scanNumLevels - 0.4] },
+        },
+        {
+            hasData: mpra.length > 0, weight: MPRA_WEIGHT, axisName: 'yaxis2', xAxisName: 'xaxis2', title: 'MPRA',
+            extra: { showticklabels: true },
+        },
+        {
+            hasData: corr.length > 0, weight: 1, axisName: 'yaxis3', xAxisName: 'xaxis3', title: 'Corr.',
+            extra: { showticklabels: true, showgrid: false, tickvals: [-1, 0, 1] },
+        },
+        {
+            hasData: single.length > 0, weight: 6, axisName: 'yaxis4', xAxisName: 'xaxis4',
+            title: div._singleTitle?.replace('\n', '<br>') || 'Predicted Effect',
+            extra: { showticklabels: true },
+        },
+    ];
+
+    const visibleSections = sectionDefs.filter(s => s.hasData);
+    const totalWeight = visibleSections.reduce((sum, s) => sum + s.weight, 0) || 1;
+    const innerAreaPx = totalWeight * AXIS_UNIT_HEIGHT; // plotting area height, excludes margins
+    const plotHeight = marginTop + marginBottom + innerAreaPx;
+
+    // Panel padding/gaps and legend offsets are all expressed in fixed
+    // pixels then converted to paper-fraction using innerAreaPx, so they
+    // stay a constant number of pixels no matter how tall the figure gets -
+    // a fixed *fraction* (e.g. y: -0.22) grows in lockstep with the plot,
+    // which is what made the whitespace above the legends balloon.
+    const px = (n) => n / innerAreaPx;
+    const topY = 1 - px(15), bottomY = px(8), gap = px(22);
+    const totalGap = gap * Math.max(visibleSections.length - 1, 0);
+    const availableHeight = Math.max(topY - bottomY - totalGap, 0);
+
+    // Which visible section is bottom-most decides which x-axis actually
+    // shows tick labels and the "Position" title - every other panel's
+    // x-axis is drawn (so its gridlines line up) but hidden.
+    const bottomSection = visibleSections[visibleSections.length - 1];
+
+    const axisLayout = {};
+    let cursor = topY;
+    sectionDefs.forEach(s => {
+        if (!s.hasData) {
+            // Hide empty axes entirely rather than leaving a blank gap.
+            axisLayout[s.axisName] = { visible: false, domain: [0, 0], showticklabels: false, anchor: s.xAxisName.replace('axis', '') };
+            axisLayout[s.xAxisName] = {
+                visible: false, domain: [0, 1], anchor: s.axisName.replace('axis', ''),
+                matches: s.xAxisName === 'xaxis' ? undefined : 'x',
+            };
+            return;
+        }
+        const height = availableHeight * (s.weight / totalWeight);
+        const top = cursor;
+        const bottom = cursor - height;
+        // Anchor each y-axis to its own same-numbered x-axis explicitly
+        // (e.g. yaxis3 <-> xaxis3) rather than relying on Plotly's implicit
+        // pairing defaults, which is what let the single shared x-axis
+        // drift to an unpredictable panel boundary before.
+        // automargin lets Plotly grow the left margin as needed to fit the
+        // title (which can be 2 lines, e.g. the Predicted Effect axis) -
+        // without it, a multi-line title can overlap the tick labels.
+        axisLayout[s.axisName] = {
+            domain: [bottom, top], title: { text: s.title }, anchor: s.xAxisName.replace('axis', ''),
+            automargin: true, ...s.extra,
+        };
+        const isBottom = s === bottomSection;
+        axisLayout[s.xAxisName] = {
+            domain: [0, 1],
+            anchor: s.axisName.replace('axis', ''), // e.g. 'yaxis3' -> 'y3'
+            matches: s.xAxisName === 'xaxis' ? undefined : 'x',
+            showticklabels: isBottom,
+            ticks: isBottom ? 'outside' : '',
+            title: isBottom ? { text: 'Position' } : undefined,
+            fixedrange: false,
+        };
+        cursor = bottom - gap;
+    });
 
     const layout = {
         template: 'plotly_white',
         uirevision: 'static',
-        margin: { t: 90, b: 40, l: 50, r: 20 },
-        xaxis: { title: { text: 'Position' }, fixedrange: false },
-        yaxis: {
-            domain: [0.72, 0.96], title: { text: 'Binding site hits' },
-            showticklabels: false, showgrid: false, zeroline: false,
-            range: [-0.6, scanNumLevels - 0.4],
-        },
-        yaxis2: { domain: [0.36, 0.68], title: { text: 'MPRA' }, showticklabels: true },
-        yaxis3: { domain: [0.305, 0.3595], title: { text: 'Corr.' }, showticklabels: true, showgrid: false, tickvals: [-1, 0, 1] },
-        yaxis4: { domain: [0.02, 0.3], title: { text: div._singleTitle?.replace('\n', '<br>') || 'Predicted Effect' }, showticklabels: true },
-        legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.16, title: { text: 'PFAM' } },
-        height: div.style && div.style.height ? parseInt(div.style.height) : 640,
+        margin: { t: marginTop, b: marginBottom, l: 50, r: 20 },
+        ...axisLayout,
+        // Top legend: PFAM groups only, horizontal, a fixed 35px above the
+        // top axis.
+        legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1 + px(35), title: { text: 'PFAM' } },
+        // Bottom legends: four small titled sub-legends in a 2x2 grid
+        // (Ref/Alt on one row, P-Value/Correlation on the next), a fixed
+        // 65px/130px below the bottom axis. Each row only has two groups
+        // sharing the width, so a 4-item group (Ref, Alt) has room to lay
+        // out horizontally without colliding into its neighbor - which is
+        // what happened when all four were packed onto a single row.
+        legend2: { orientation: 'h', x: 0.05, xanchor: 'left', y: -px(65), yanchor: 'top', title: { text: 'Ref', font: { weight: 'bold' } } },
+        legend3: { orientation: 'h', x: 0.55, xanchor: 'left', y: -px(65), yanchor: 'top', title: { text: 'Alt', font: { weight: 'bold' } } },
+        legend4: { orientation: 'h', x: 0.05, xanchor: 'left', y: -px(130), yanchor: 'top', title: { text: 'P-Value', font: { weight: 'bold' } } },
+        legend5: { orientation: 'h', x: 0.55, xanchor: 'left', y: -px(130), yanchor: 'top', title: { text: 'Correlation', font: { weight: 'bold' } } },
+        height: plotHeight,
     };
 
-    // If plot doesn't exist yet, use newPlot, otherwise react
+    // Plotly.react was keeping traces pinned to whichever legend ('legend'
+    // vs 'legend2') they were first drawn into, so nucleotide entries that
+    // moved from the top PFAM legend to the bottom legend on a later render
+    // stayed stuck at the top. Plotly.redraw forces a full recomputation
+    // (including legend membership) from the current div.data/div.layout,
+    // but - unlike Plotly.newPlot - without destroying and recreating the
+    // plot instance, so it doesn't reset the x-axis zoom/pan and doesn't
+    // discard the hover/click listeners attached below.
+    // Plotly.redraw() re-renders the SVG at the new layout.height but does
+    // not resize the container <div> itself, so a plot that grows taller
+    // across renders (e.g. once the predicted-effect panel gets added)
+    // overflows its box and visually overlaps whatever comes after it in
+    // the page. Set the div's own height explicitly so normal page flow
+    // (and the height of #mpra-combined-container around it) grows with it.
+    div.style.height = `${plotHeight}px`;
+
     if (!div._initialized) {
-        Plotly.newPlot(div, traces, layout, { responsive: true });
+        Plotly.newPlot(div, traces, layout, { responsive: true }).then(() => {
+            attachCombinedPlotHandlers(div);
+        });
         div._initialized = true;
     } else {
-        Plotly.react(div, traces, layout, { responsive: true });
+        div.data = traces;
+        // Merge into the existing xaxis object (rather than replacing it
+        // outright) so a user's current zoom/pan range isn't clobbered.
+        Object.assign(div.layout.xaxis, layout.xaxis);
+        Object.keys(layout).forEach(key => {
+            if (key !== 'xaxis') div.layout[key] = layout[key];
+        });
+        Plotly.redraw(div);
     }
+}
+
+/** Attach the combined plot's hover/click handlers. Called once, right after
+ * the initial Plotly.newPlot() - Plotly.redraw() (used for later updates)
+ * does not tear down the plot's event system, so these stay attached. */
+function attachCombinedPlotHandlers(div) {
+    // Hover: highlight the hit window this inset belongs to
+    div.on('plotly_hover', (e) => {
+        const data = e.points[0]?.data;
+        if (!data || data.fileId === undefined) return;
+        const shape = [{
+            type: 'rect', xref: 'x', yref: 'paper', x0: data.windowStart, x1: data.windowEnd, y0: 0, y1: 1,
+            fillcolor: 'rgba(200,200,200,0.25)', line: {width: 0}, layer: 'below'
+        }];
+        Plotly.relayout(div, {shapes: shape});
+    });
+
+    div.on('plotly_unhover', () => {
+        Plotly.relayout(div, {shapes: []});
+    });
+
+    // Click-to-select
+    div.on('plotly_click', (e) => {
+        const data = e.points[0]?.data;
+        if (!data || data.fileId === undefined) return;
+        loadHitDetail(data.fileId);
+    });
 }
 
 
@@ -329,102 +553,16 @@ function renderScanResults(scanData) {
 
     // Render before attaching handlers to ensure Plotly has initialized the div
     updateCombinedPlot();
-
-    // Attach handlers once. They read combinedDiv._lastScanData/_fileNameToId dynamically so
-    // reattachment on every render is not needed and causes duplicates.
-    if (!combinedDiv._handlersAttached) {
-        // helper to attach handlers when Plotly has initialized the div
-        const attachHandlers = () => {
-            if (combinedDiv._handlersAttached) return;
-            combinedDiv._lastClick = { key: null, time: 0 };
-
-            // Hover: highlight the hit window this inset belongs to
-            combinedDiv.on('plotly_hover', (e) => {
-                const data = e.points[0]?.data;
-                if (!data || data.fileId === undefined) return;
-                const shape = [{
-                    type: 'rect', xref: 'x', yref: 'paper', x0: data.windowStart, x1: data.windowEnd, y0: 0, y1: 1,
-                    fillcolor: 'rgba(200,200,200,0.25)', line: {width: 0}, layer: 'below'
-                }];
-                Plotly.relayout(combinedDiv, {shapes: shape});
-            });
-
-            combinedDiv.on('plotly_unhover', () => {
-                Plotly.relayout(combinedDiv, {shapes: []});
-            });
-
-            // Click-to-select: use native DOM click count (e.event.detail) to distinguish single vs double click
-            combinedDiv.on('plotly_click', (e) => {
-                const data = e.points[0]?.data;
-                if (!data || data.fileId === undefined) return;
-                loadHitDetail(data.fileId);
-            });
-
-            combinedDiv._handlersAttached = true;
-        };
-
-        if (typeof combinedDiv.on === 'function') {
-            attachHandlers();
-        } else {
-            // Plotly may not have attached helper methods yet; retry shortly
-            setTimeout(() => {
-            if (typeof combinedDiv.on === 'function') attachHandlers();
-            else console.warn('Plotly event helpers not available; event handlers not attached.');
-            }, 50);
-        }
-    }
-}
-
-function renderScanTable(scanData, fileNameToId) {
-    const tbody = UTILS.getElementByIdOrThrow('mpra-scan-tbody');
-    tbody.innerHTML = '';
-
-    // Invert pfam_map (name -> [filenames]) to filename -> pfam names
-    const filenameToPfams = {};
-    Object.entries(scanData.pfam_map || {}).forEach(([pfamName, filenames]) => {
-        filenames.forEach(fn => {
-            filenameToPfams[fn] = filenameToPfams[fn] || [];
-            filenameToPfams[fn].push(pfamName);
-        });
-    });
-
-    const rows = [];
-    scanData.hits.forEach(hit => {
-        const fileName = scanData.file_meta[hit.file_id]?.filename || `file_${hit.file_id}`;
-        hit.positions.forEach((pos, i) => {
-            rows.push({
-                fileName,
-                fileId: hit.file_id,
-                pfams: (filenameToPfams[fileName] || []).join(', ') || fileName,
-                start: pos,
-                end: pos + scanData.window_size - 1,
-                score: hit.scores[i],
-            });
-        });
-    });
-    rows.sort((a, b) => b.score - a.score);
-
-    rows.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${row.fileName}</td>
-            <td>${row.pfams}</td>
-            <td>${row.start}-${row.end}</td>
-            <td>${row.score.toFixed(3)}</td>
-            <td><button class="btn btn-outline-primary btn-sm view-hit-btn">View</button></td>
-        `;
-        tr.querySelector('.view-hit-btn').addEventListener('click', () => loadHitDetail(row.fileId));
-        tbody.appendChild(tr);
-    });
 }
 
 async function loadHitDetail(fileId) {
     const mpraData = getMpraData();
     showGlobalLoading(false);
+    const fileType = getMpraFileType('mpra_scan_file_type');
     const formData = new FormData();
     formData.append('ref_name', mpraData.seq_name);
     formData.append('ref_sequence', mpraData.ref_sequence);
-    formData.append('file_type', getMpraFileType('mpra_scan_file_type'));
+    formData.append('file_type', fileType);
     formData.append('score_0', fileId);
 
     // Include scan parameters for correlation computation
@@ -442,7 +580,7 @@ async function loadHitDetail(fileId) {
                 showToasts(data);
                 return;
             }
-            renderSinglePlot(data);
+            renderSinglePlot(data, fileType);
             UTILS.getElementByIdOrThrow('mpra-combined-plot').scrollIntoView({ behavior: 'smooth', block: 'center' });
         })
         .catch(handleError);
