@@ -13,6 +13,39 @@ from . import bindline
 from . import files
 
 
+class MatrixScoreTable:
+    """
+    Adapter exposing the same interface as bindline.EScoreTable / ZScoreTable
+    / IScoreTable (`.score`, `.score_seqs`, `.max_score`, `.rank_threshold`,
+    `.mer`), but backed directly by an already-loaded TFIdentifier matrix
+    instead of re-reading and re-parsing the raw score file.
+
+    This is what lets the app treat the in-memory matrix as the single
+    source of truth for scoring: the numbers shown to the user are read from
+    the exact same array that identification/scanning used, so they can't
+    silently disagree with each other at floating-point boundaries the way
+    two independently-parsed copies could. The raw file on disk is still
+    kept around for download and for rebuilding the matrix if it's ever
+    lost, but the live app no longer needs to re-read it to display scores.
+    """
+    def __init__(self, identifier, tf_id):
+        self._identifier = identifier
+        self._tf_id = tf_id
+        self.mer = identifier.mer_for(tf_id)
+
+    def score(self, seq):
+        return self._identifier.score(self._tf_id, seq)
+
+    def score_seqs(self, seqs):
+        return {name: (seq, self.score(seq)) for name, seq in seqs.items()}
+
+    def max_score(self):
+        return self._identifier.max_score(self._tf_id)
+
+    def rank_threshold(self, relative_threshold):
+        return self._identifier.score_percentile_value(self._tf_id, relative_threshold)
+
+
 def list_user_public_score_file_jsons():
     return sum(map(lambda fs: [f.to_public_json() for f in fs], files.list_user_public_score_files()), [])
 

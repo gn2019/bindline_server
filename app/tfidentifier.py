@@ -15,7 +15,27 @@ _LUT[ord("G")] = 2
 _LUT[ord("T")] = 3
 
 
+_VALID_BASES = frozenset('ACGT')
+
+
 def encode_sequence(seq: str):
+    """
+    Raise on anything outside A/C/G/T instead of silently mis-encoding it.
+    _LUT defaults every byte to 0 (the code for 'A'), so before this check
+    an unrecognized character (lowercase from an insertion marker, 'N', a
+    gap '-', a stray whitespace character, etc.) would quietly be scored as
+    if it were 'A' -- a wrong-but-plausible-looking number, rather than an
+    error. The old raw-file dict lookup (EScoreTable.score) instead returned
+    None for any k-mer it didn't recognize, so callers already expect
+    "unscoreable" positions to be explicit; this keeps that same contract
+    for the matrix-backed path instead of introducing a silent divergence.
+    """
+    invalid = sorted(set(seq) - _VALID_BASES)
+    if invalid:
+        raise ValueError(
+            f"Sequence contains non-ACGT character(s) {invalid}; matrix-based "
+            f"scoring/identification only supports A/C/G/T."
+        )
     return _LUT[np.frombuffer(seq.encode("ascii"), dtype=np.uint8)]
 
 
@@ -163,6 +183,70 @@ class TFIdentifier:
                     mat = np.where(r >= local_rank_thr, mat, np.nan)
 
             self._threshold_mat[k] = mat
+
+    def _find_k_and_row(self, tf_id):
+        """
+        Locate which k-mer matrix a tf_id lives in and its row index there.
+        A tf_id belongs to at most one k at a time (update()/update_many()
+        always remove() it from every other k first), so the first match
+        found is the only one. Returns (None, None) if not present anywhere.
+        """
+        for k in self.kmers:
+            ids = self.abs_ids.get(k)
+            if ids is None or ids.size == 0:
+                continue
+            matches = np.where(ids == tf_id)[0]
+            if matches.size:
+                return k, int(matches[0])
+        return None, None
+
+    def has_tf(self, tf_id) -> bool:
+        k, _ = self._find_k_and_row(tf_id)
+        return k is not None
+
+    def mer_for(self, tf_id) -> int:
+        k, _ = self._find_k_and_row(tf_id)
+        if k is None:
+            raise KeyError(f"tf_id {tf_id} not found in this TFIdentifier")
+        return k
+
+    def score(self, tf_id, seq):
+        """
+        Per-position score array for one TF against `seq`, read directly
+        from the in-memory matrix -- the same numbers used to identify hits
+        for this TF -- rather than a separately re-parsed copy of the raw
+        file. Equivalent to bindline.EScoreTable.score(seq), but backed by
+        abs_mat/abs_ids instead of a dict built from the raw text file.
+        """
+        k, row = self._find_k_and_row(tf_id)
+        if k is None:
+            raise KeyError(f"tf_id {tf_id} not found in this TFIdentifier")
+        if len(seq) < k:
+            return []
+        enc = encode_sequence(seq)
+        idxs = rolling_kmer_indices(enc, k)
+        return self.abs_mat[k][row, idxs].tolist()
+
+    def max_score(self, tf_id) -> float:
+        """Equivalent to bindline.EScoreTable.max_score()."""
+        k, row = self._find_k_and_row(tf_id)
+        if k is None:
+            raise KeyError(f"tf_id {tf_id} not found in this TFIdentifier")
+        return float(self.abs_mat[k][row].max())
+
+    def score_percentile_value(self, tf_id, relative_threshold) -> float:
+        """
+        The score value at `relative_threshold` percent (0-100) of this TF's
+        own score distribution. Equivalent to the old
+        bindline.EScoreTable.rank_threshold() -- distinct from this class's
+        own rank_mat/rank_ids, which store precomputed rank *positions* used
+        for the coarser identification threshold in _prepare_thresholds.
+        """
+        k, row = self._find_k_and_row(tf_id)
+        if k is None:
+            raise KeyError(f"tf_id {tf_id} not found in this TFIdentifier")
+        sorted_scores = np.sort(self.abs_mat[k][row])
+        return float(sorted_scores[int(len(sorted_scores) * relative_threshold / 100)])
 
     def __identify_one(self, seq, summarize: bool = False):
         """

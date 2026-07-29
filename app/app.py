@@ -181,6 +181,13 @@ def get_pfam_ids(request):
 
 
 def get_score_files(request):
+    """
+    Returns a list of (filename, file_or_None, score_path) tuples. `file` is
+    the DB File object when one exists (so callers can look it up in a
+    TFIdentifier matrix); it's None for anonymous, ephemeral uploads that
+    are never persisted or added to any matrix, in which case `score_path`
+    is the only usable source and is an in-memory stream rather than a path.
+    """
     if 'score' in request.files and request.files.getlist('score')[0].filename:
         # save them (it's a list of files)
         if current_user.is_authenticated:
@@ -193,9 +200,9 @@ def get_score_files(request):
                 stored_files.append(file)
             update_file_pfams(stored_files, get_pfam_ids(request))
             # take their names
-            return [(file.filename, get_file_path(file)) for file in stored_files]
+            return [(file.filename, file, get_file_path(file)) for file in stored_files]
         else:
-            return [(score_file.filename, io.StringIO(score_file.read().decode("utf-8")))
+            return [(score_file.filename, None, io.StringIO(score_file.read().decode("utf-8")))
                     for score_file in request.files.getlist('score')]
     else:
         score_files = []
@@ -203,7 +210,7 @@ def get_score_files(request):
             if var.startswith('score_') and request.form[var].isdigit():
                 file_id = int(request.form[var])
                 file = files.get_file_by_id(file_id)
-                score_files.append((file.filename, get_file_path(file)), )
+                score_files.append((file.filename, file, get_file_path(file)))
         return score_files
 
 
@@ -262,6 +269,34 @@ def get_identifier_by_type(file_type):
         if file_type in user_dict:
             identifier += user_dict[file_type]
     return identifier
+
+
+def get_score_table_for_file(file_type, identifier, file=None, score_path=None):
+    """
+    Prefer reading scores straight from the already-loaded matrix
+    (`identifier`) instead of re-reading and re-parsing the raw file --
+    the matrix holds the same numbers used for identification/scanning, so
+    this removes the possibility of the raw file and the matrix having
+    silently drifted apart (or simply having been parsed to slightly
+    different floating-point values) between the moment something was
+    identified as a hit and the moment its score gets displayed.
+
+    Falls back to parsing the raw file/stream when there's no `file` at all
+    (anonymous, ephemeral uploads that were never persisted or added to any
+    matrix), or when this exact file isn't present in `identifier` (e.g. it
+    was uploaded moments ago and update_mats failed for this score type --
+    see the `warnings` surfaced from update_mats). `score_path` must be
+    given whenever `file` is None; otherwise it defaults to the file's own
+    path on disk.
+    """
+    if file is not None and identifier.has_tf(file.id):
+        return MatrixScoreTable(identifier, file.id)
+    if score_path is None:
+        if file is None:
+            raise ValueError("get_score_table_for_file requires either `file` or `score_path`.")
+        score_path = get_file_path(file)
+    _, _, table = get_score_table(score_path, file_type)
+    return table
 
 
 @app.route('/list-files/<file_type>', methods=['GET'])
@@ -362,7 +397,11 @@ def find_binding_sites():
     identified_binding_sites = {}
     for file_id in identified_unq_file_ids:
         file = files.get_file_by_id(file_id)
-        _, _, identified_tables[file.filename] = get_score_table(get_file_path(file), file_type)
+        # `file_id` came from scanning `identifier` itself, so it's guaranteed
+        # to be present there -- this reads the exact same numbers that
+        # identified the hit, instead of a separately re-parsed copy of the
+        # raw file that could disagree with it at the margins.
+        identified_tables[file.filename] = get_score_table_for_file(file_type, identifier, file=file)
         score = identified_tables[file.filename].score_seqs(sequences)
 
         identified_binding_sites[file.filename] = {}
@@ -486,6 +525,7 @@ def find_significant_mutations():
     ref_name = request.form.get('ref_name')
     sequences = get_all_mutants(*next(iter(sequences.items())))
     score_files = get_score_files(request)
+    identifier = get_identifier_by_type(file_type)
 
     aligned_scores = {}
     aligned_seqs = {}
@@ -495,8 +535,8 @@ def find_significant_mutations():
     binding_sites = {}
     gaps, insertions = {}, {}
 
-    for score_file, score_path in score_files:
-        name, motif, table = get_score_table(score_path, file_type)
+    for score_file, file_obj, score_path in score_files:
+        table = get_score_table_for_file(file_type, identifier, file=file_obj, score_path=score_path)
         scores_dict = table.score_seqs(sequences)
 
         max_scores[score_file] = table.max_score()
@@ -585,6 +625,7 @@ def upload_files_():
     file_type = request.form.get('file_type')
     sequences = get_sequences_from_request(request)
     score_files = get_score_files(request)
+    identifier = get_identifier_by_type(file_type)
     ref_name = request.form.get('ref_name')
 
     aligned_scores = {}
@@ -598,8 +639,8 @@ def upload_files_():
     if should_show_binding_sites:
         highest_values, binding_sites, gaps, insertions = {}, {}, {}, {}
 
-    for score_file, score_path in score_files:
-        name, motif, table = get_score_table(score_path, file_type)
+    for score_file, file_obj, score_path in score_files:
+        table = get_score_table_for_file(file_type, identifier, file=file_obj, score_path=score_path)
         scores_dict = table.score_seqs(sequences)
 
         max_scores[score_file] = table.max_score()
