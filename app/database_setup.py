@@ -36,6 +36,12 @@ class File(db.Model):
     publication = db.Column(db.String(50), nullable=False)
     species = db.Column(db.String(50), nullable=False)
     notes = db.Column(db.String(255), nullable=False)
+    # Automated/technical provenance only (e.g. dedup-script audit trail).
+    # Deliberately separate from `notes`, which is curator-facing and gets
+    # rendered in the UI (public data page, score-file select dropdown).
+    # internal_notes is NEVER included in to_public_json() and NEVER shown
+    # in any template/JS -- it's for admins reading the DB directly.
+    internal_notes = db.Column(db.String(255), nullable=True)
 
     user = db.relationship('User', backref=db.backref('files', lazy=True))
 
