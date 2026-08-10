@@ -4,7 +4,7 @@ import { addSequenceRow, getRefRow, setFirstAsRef, getSequenceRows, isCheckedRow
 import { importQueryData, } from './samples.js';
 
 // Load existing E-Score files into dropdown and enable searchable multi-selection
-function loadExistingFiles() {
+export function loadExistingFiles() {
     fetch('/list-files/score')
         .then(response => response.json())
         .then(files => {
@@ -1294,7 +1294,7 @@ function getKmerLengthFromAlignedSeq(aligned_seq, k, start = 0) {
 }
 
 // Function to toggle slider and input enabled/disabled state using the checkbox
-function toggleSliderAndInput(checkboxId, sliderId, inputId) {
+export function toggleSliderAndInput(checkboxId, sliderId, inputId) {
     const checkbox = UTILS.getElementByIdOrThrow(checkboxId);
     const label = document.querySelector(`label[for="${checkboxId}"]`);
     const slider = UTILS.getElementByIdOrThrow(sliderId);
@@ -1310,7 +1310,7 @@ function toggleSliderAndInput(checkboxId, sliderId, inputId) {
 }
 
 // Function to synchronize slider and input values
-function syncSliderAndInput(sliderId, inputId) {
+export function syncSliderAndInput(sliderId, inputId) {
     const slider = UTILS.getElementByIdOrThrow(sliderId);
     const input = UTILS.getElementByIdOrThrow(inputId);
 
@@ -1319,7 +1319,7 @@ function syncSliderAndInput(sliderId, inputId) {
     });
 }
 
-function hideThresholds() {
+export function hideThresholds() {
     // get current file_type radio checked
     const fileType = document.querySelector('input[name="file_type"]:checked').value;
     const scores = ['escore', 'zscore', 'iscore'];
@@ -1362,7 +1362,7 @@ export function hideGlobalLoading() {
 }
 
 
-function getRadio(name) {
+export function getRadio(name) {
     return document.querySelectorAll(`input[name="${name}"]`);
 }
 
@@ -1474,7 +1474,7 @@ function togglePlotRelatedElements(containerId, show) {
     }
 }
 
-function initTooltips() {
+export function initTooltips() {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (el) {
         return new bootstrap.Tooltip(el);

@@ -232,3 +232,66 @@ div#thresholds input:disabled {
 .data-btn i {
     font-size: 0.95em;
 }
+
+/* Floating tooltip-style preview (MPRA vs. predicted-effect correlation
+ * scatter). Small and non-modal on purpose: it follows the cursor while
+ * hovering the Corr. line and disappears when you look away, like a native
+ * tooltip - not a persistent panel you drag/resize around. 120x110 is the
+ * 480x440 original scaled down 4x per side (1/16 the area). */
+.floating-window {
+    position: fixed;
+    top: 110px;
+    right: 40px;
+    width: 120px;
+    height: 110px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: left 0.06s linear, top 0.06s linear;
+}
+
+.floating-window-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1px 4px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 5px 5px 0 0;
+    flex: 0 0 auto;
+}
+
+.floating-window-title {
+    font-weight: 600;
+    font-size: 0.62rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.floating-window-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    padding: 1px;
+}
+
+.btn-close-tooltip {
+    border: none;
+    background: transparent;
+    line-height: 1;
+    font-size: 0.85rem;
+    color: #64748b;
+    padding: 0 2px;
+    flex: 0 0 auto;
+}
+
+.btn-close-tooltip:hover {
+    color: #1e293b;
+}

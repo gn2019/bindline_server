@@ -14,6 +14,13 @@ function handleError(error) {
     console.error(error);
 }
 
+// Shared nucleotide styling, used everywhere a variant/mutation needs to be
+// drawn: color by Alt (mutant) base, shape by Ref (reference) base. Kept as
+// one source of truth so the MPRA track, the combined plot, and the
+// correlation-points floating window all look identical.
+const NUCLEOTIDE_COLORS = { A: 'green', C: 'blue', G: 'orange', T: 'red', '-': 'gray' };
+const NUCLEOTIDE_SHAPES = { A: 'square', C: 'circle', G: 'triangle-up', T: 'diamond' };
+
 /** Populate the "existing score file" dropdown, reusing the same /list-files/score endpoint. */
 function loadExistingScoreFiles() {
     fetch('/list-files/score')
@@ -68,8 +75,8 @@ async function loadMpraData() {
 
 /** Build MPRA experimental scatter traces: color by Alt, shape by Ref, lines colored by significance. */
 function createMpraExperimentalTraces(refSequence, variants) {
-    const nucleotideColors = { A: 'green', C: 'blue', G: 'orange', T: 'red', '-': 'gray' };
-    const nucleotideShapes = { A: 'square', C: 'circle', G: 'triangle-up', T: 'diamond' };
+    const nucleotideColors = NUCLEOTIDE_COLORS;
+    const nucleotideShapes = NUCLEOTIDE_SHAPES;
 
     const markerTraces = [];
     const lineTraces = [];
@@ -231,8 +238,12 @@ function renderSinglePlot(plotData, fileType) {
     const titleLine1 = scoreLabel ? `Predicted ${scoreLabel}-Score Effect` : 'Predicted Effect';
     combinedDiv._singleTitle = `${titleLine1}\n${plotData.score_file}`;
 
-    // Use correlation from backend if available
+    // Use correlation from backend if available. windowSize/_isCorrLine let
+    // attachCombinedPlotHandlers() recognize a hover on this trace and look
+    // up which MPRA/predicted-effect points fed that window's correlation
+    // value (see showCorrelationWindowPoints()).
     if (plotData.correlation_positions && plotData.correlation_values) {
+        const windowSize = parseInt(UTILS.getElementByIdOrThrow('mpra-window-size').value, 10) || 1;
         combinedDiv._corrTraces = [{
             x: plotData.correlation_positions,
             y: plotData.correlation_values,
@@ -240,14 +251,190 @@ function renderSinglePlot(plotData, fileType) {
             line: { color: 'purple', width: 2 },
             name: 'MPRA vs. Protein',
             yaxis: 'y3',
-            hovertemplate: 'pos %{x}: r=%{y:.3f}<extra></extra>',
+            hoverinfo: 'none',
             _legendEntry: true, _legendKind: 'corr', _legendKey: 'corr',
+            _isCorrLine: true,
+            windowSize,
         }];
     } else {
         combinedDiv._corrTraces = [];
     }
 
+    // Keep the raw per-position/per-base predicted effect (mutants_effect)
+    // around so the correlation-points tooltip can pair it up against the
+    // MPRA values on demand (on Corr.-line hover), without re-fetching from
+    // the server.
+    combinedDiv._lastCorrPointsData = {
+        mutantsEffect: plotData.mutants_effect,
+        scoreFile: plotData.score_file,
+        scoreLabel: scoreLabel,
+    };
+    // A tooltip from hovering the previous comparison's Corr. line could
+    // still be showing - hide it rather than leave it displaying stale data.
+    hideCorrelationTooltip();
+
     updateCombinedPlot();
+}
+
+/** Pair every MPRA variant with a value against its predicted effect (mutants_effect),
+ * dropping variants with no MPRA value, a non-ACGT ref/alt, or no matching predicted entry. */
+function collectCorrelationPoints(variants, mutantsEffect) {
+    const points = [];
+    (variants || []).forEach(v => {
+        if (v.value === null || v.value === undefined) return;
+        if (!NUCLEOTIDE_SHAPES[v.ref] || !NUCLEOTIDE_COLORS[v.alt] || v.alt === '-') return;
+        const predicted = mutantsEffect?.[v.position]?.[v.alt];
+        if (predicted === null || predicted === undefined) return;
+        points.push({ position: v.position, ref: v.ref, alt: v.alt, mpra: v.value, predicted, p_value: v.p_value });
+    });
+    return points;
+}
+
+/** Build scatter traces for the correlation-points tooltip: one trace per (Ref, Alt)
+ * combo present in the data, colored by Alt and shaped by Ref - the same scheme used
+ * for the MPRA track and the "All Mutants" plot. The tooltip only ever shows points
+ * that are already relevant (a hovered window's points, or all of them), so unlike an
+ * in-place highlight there's no need for a dimmed/highlighted style distinction. */
+function buildCorrelationScatterTraces(points) {
+    const groups = {};
+    points.forEach(p => {
+        const key = `${p.ref}>${p.alt}`;
+        (groups[key] = groups[key] || []).push(p);
+    });
+
+    return Object.entries(groups).map(([key, pts]) => {
+        const [ref, alt] = key.split('>');
+        return {
+            x: pts.map(p => p.mpra),
+            y: pts.map(p => p.predicted),
+            mode: 'markers',
+            marker: {
+                color: NUCLEOTIDE_COLORS[alt], symbol: NUCLEOTIDE_SHAPES[ref],
+                size: 8, opacity: 0.9,
+            },
+            name: key,
+            showlegend: false,
+        };
+    });
+}
+
+/** Compact layout for the tooltip-sized scatter: no legend/axis titles (no room for
+ * them at ~120x110px) - just the dots and the window's calculated score as the title.
+ * `score` is the exact backend-computed value for this window (the same number shown
+ * on hover over the Corr. line itself: score = (1-alpha)*r + alpha*|sign_score|, from
+ * windowed_effect_correlation() in bindline_utils.py) - not a Pearson r recomputed
+ * client-side, which would disagree with it (see showCorrelationWindowPoints()). */
+function getCorrPointsLayout(score) {
+    const scoreText = score === null || score === undefined ? 'n/a' : score.toFixed(2);
+    return {
+        title: { text: `score = ${scoreText}`, font: { size: 10 } },
+        xaxis: { showticklabels: false, zeroline: true, showgrid: false },
+        yaxis: { showticklabels: false, zeroline: true, showgrid: false },
+        margin: { t: 16, b: 4, l: 4, r: 4 },
+        template: 'plotly_white',
+        showlegend: false,
+    };
+}
+
+/** Position the tooltip near a point on screen (mouse cursor or a button), offset so
+ * it doesn't sit directly under it, and flipped to whichever side keeps it on-screen. */
+function positionTooltip(win, x, y) {
+    if (x === undefined || y === undefined) return;
+    const offset = 14;
+    const width = win.offsetWidth || 120;
+    const height = win.offsetHeight || 110;
+    let left = x + offset;
+    let top = y + offset;
+    if (left + width > window.innerWidth) left = x - offset - width;
+    if (top + height > window.innerHeight) top = y - offset - height;
+    win.style.left = `${Math.max(0, left)}px`;
+    win.style.top = `${Math.max(0, top)}px`;
+    win.style.right = 'auto';
+}
+
+function hideCorrelationTooltip() {
+    UTILS.getElementByIdOrThrow('mpra-corr-window').classList.add('d-none');
+}
+
+/** Draw `points` into the tooltip at (x, y) and reveal it. `score` is the backend's
+ * precomputed value for this window - see getCorrPointsLayout(). */
+function renderCorrelationTooltip(points, title, score, x, y) {
+    if (!points.length) {
+        hideCorrelationTooltip();
+        return;
+    }
+    const traces = buildCorrelationScatterTraces(points);
+    const layout = getCorrPointsLayout(score);
+
+    const win = UTILS.getElementByIdOrThrow('mpra-corr-window');
+    positionTooltip(win, x, y);
+    win.classList.remove('d-none');
+    UTILS.getElementByIdOrThrow('mpra-corr-window-title').textContent = title;
+
+    const plotDiv = UTILS.getElementByIdOrThrow('mpra-corr-scatter-plot');
+    // staticPlot: this tooltip is a read-only preview - nothing inside it needs its
+    // own hover/zoom/pan, so skip the overhead of Plotly wiring that up.
+    Plotly.react(plotDiv, traces, layout, { staticPlot: true, responsive: true });
+}
+
+/** Hovering a point on the combined plot's "Corr." line previews *only* that
+ * window's MPRA-vs-predicted-effect points (not the full set with some points
+ * dimmed), positioned right next to the cursor like a native tooltip. `score`
+ * is that window's y-value on the Corr. line itself (plotData.correlation_values
+ * from /mpra/single) - the actual backend-calculated score, passed straight
+ * through rather than recomputed here. */
+function showCorrelationWindowPoints(windowStart, windowEnd, score, clientX, clientY) {
+    const mpraData = getMpraData();
+    const combinedDiv = UTILS.getElementByIdOrThrow('mpra-combined-plot');
+    const corrData = combinedDiv._lastCorrPointsData;
+    if (!mpraData || !corrData) return;
+
+    const allPoints = collectCorrelationPoints(mpraData.variants, corrData.mutantsEffect);
+    const windowPoints = allPoints.filter(p => p.position >= windowStart && p.position < windowEnd);
+    renderCorrelationTooltip(windowPoints, `pos ${windowStart}-${windowEnd - 1}`, score, clientX, clientY);
+}
+
+/** Stable identity for a binding-site hit bar trace (createBindingSiteBarTraces
+ * gives each one fileId/windowStart/windowEnd), used to track which one is
+ * "selected" (clicked) across re-renders. */
+function hitKey(t) {
+    return `${t.fileId}:${t.windowStart}:${t.windowEnd}`;
+}
+
+/** Build a `rect` shape outlining the selected hit bar (if any), in plain data
+ * coordinates (x0/x1 = the bar's real start/end, y0/y1 = its packed row band).
+ * This replaced an earlier attempt that fudged an extra scatter trace with a
+ * wider black line "behind" the bar: that required converting a pixel padding
+ * into data units by hand, using the axis scale *at the moment of the click* -
+ * so it drifted out of sync the instant the user zoomed or panned afterward.
+ * A shape avoids that entirely: Plotly recomputes shapes from their data
+ * coordinates on every redraw (zoom, pan, resize, ...), and `line.width` is
+ * still a true screen-pixel stroke, so the border simply stays correct. */
+function getSelectionShape(div) {
+    const key = div._selectedHitKey;
+    if (!key) return null;
+    const bar = (div._scanTraces || []).find(t => t.fileId !== undefined && hitKey(t) === key);
+    if (!bar) return null;
+    const level = bar.y[0];
+    return {
+        type: 'rect', xref: 'x', yref: 'y',
+        x0: bar.x[0], x1: bar.x[1], y0: level - 0.4, y1: level + 0.4,
+        line: { color: 'black', width: 3 },
+        fillcolor: 'rgba(0,0,0,1)',
+        layer: 'below',
+    };
+}
+
+/** Redraw the plot's shapes: the persistent selection outline (if a hit is
+ * selected) plus an optional transient one (the hover-highlight rectangle).
+ * Centralizing this means the hover handlers just describe what to show on
+ * top, without needing to remember the selection border every time. */
+function setPlotShapes(div, hoverShape) {
+    const selectionShape = getSelectionShape(div);
+    const shapes = [];
+    if (selectionShape) shapes.push(selectionShape);
+    if (hoverShape) shapes.push(hoverShape);
+    Plotly.relayout(div, { shapes });
 }
 
 // Combined plot update: top = binding-site hit insets (yaxis + dynamic xaxisN/yaxisN),
@@ -342,7 +529,11 @@ function updateCombinedPlot() {
         },
         {
             hasData: corr.length > 0, weight: 1, axisName: 'yaxis3', xAxisName: 'xaxis3', title: 'Corr.',
-            extra: { showticklabels: true, showgrid: false, tickvals: [-1, 0, 1] },
+            // Fix the range to the correlation's own bounds - without this,
+            // Plotly autoranges to fit the data, which rarely reaches -1/1,
+            // so those tickvals fall outside the visible range and never
+            // actually get drawn even though they're listed.
+            extra: { showticklabels: true, showgrid: false, tickvals: [-1, 0, 1], range: [-1, 1] },
         },
         {
             hasData: single.length > 0, weight: 6, axisName: 'yaxis4', xAxisName: 'xaxis4',
@@ -450,6 +641,7 @@ function updateCombinedPlot() {
     if (!div._initialized) {
         Plotly.newPlot(div, traces, layout, { responsive: true }).then(() => {
             attachCombinedPlotHandlers(div);
+            setPlotShapes(div, null); // no-op today (nothing can be selected yet), kept for symmetry
         });
         div._initialized = true;
     } else {
@@ -461,6 +653,10 @@ function updateCombinedPlot() {
             if (key !== 'xaxis') div.layout[key] = layout[key];
         });
         Plotly.redraw(div);
+        // Re-apply the selection outline every time: Plotly.redraw() doesn't
+        // touch div.layout.shapes on its own, but the bar this shape traces
+        // out is rebuilt fresh above (traces array), so keep it in lockstep.
+        setPlotShapes(div, null);
     }
 }
 
@@ -468,25 +664,60 @@ function updateCombinedPlot() {
  * the initial Plotly.newPlot() - Plotly.redraw() (used for later updates)
  * does not tear down the plot's event system, so these stay attached. */
 function attachCombinedPlotHandlers(div) {
-    // Hover: highlight the hit window this inset belongs to
+    // Tracks whether the currently-hovered point is on the Corr. line, so
+    // plotly_unhover only bothers hiding the correlation-points tooltip when
+    // it's actually relevant, rather than on every unhover anywhere in the
+    // combined plot.
+    let hoveringCorrLine = false;
+
+    // Hover: highlight the hit window this inset belongs to; hovering a point
+    // on the Corr. line instead pops up a tooltip of that window's
+    // MPRA-vs-predicted-effect points, right next to the cursor.
     div.on('plotly_hover', (e) => {
-        const data = e.points[0]?.data;
-        if (!data || data.fileId === undefined) return;
-        const shape = [{
+        const point = e.points[0];
+        const data = point?.data;
+        if (!data) return;
+
+        if (data._isCorrLine) {
+            hoveringCorrLine = true;
+            const windowStart = point.x;
+            const windowEnd = windowStart + (data.windowSize || 1) - 1;
+            setPlotShapes(div, {
+                type: 'rect', xref: 'x', yref: 'paper', x0: windowStart, x1: windowEnd, y0: 0, y1: 1,
+                fillcolor: 'rgba(128,0,128,0.12)', line: {width: 0}, layer: 'below'
+            });
+            // point.y is this window's actual score (same value the Corr. line's
+            // own hover label shows); e.event is the native mouse event that
+            // triggered this hover - its screen position places the tooltip next
+            // to the cursor.
+            showCorrelationWindowPoints(windowStart, windowEnd, point.y, e.event?.clientX, e.event?.clientY);
+            return;
+        }
+        hoveringCorrLine = false;
+
+        if (data.fileId === undefined) return;
+        setPlotShapes(div, {
             type: 'rect', xref: 'x', yref: 'paper', x0: data.windowStart, x1: data.windowEnd, y0: 0, y1: 1,
             fillcolor: 'rgba(200,200,200,0.25)', line: {width: 0}, layer: 'below'
-        }];
-        Plotly.relayout(div, {shapes: shape});
+        });
     });
 
     div.on('plotly_unhover', () => {
-        Plotly.relayout(div, {shapes: []});
+        setPlotShapes(div, null);
+        if (hoveringCorrLine) {
+            hoveringCorrLine = false;
+            hideCorrelationTooltip();
+        }
     });
 
-    // Click-to-select
+    // Click-to-select: mark the clicked hit with a black outline immediately
+    // (updateCombinedPlot(), rather than waiting on loadHitDetail()'s fetch),
+    // then load its protein comparison as before.
     div.on('plotly_click', (e) => {
         const data = e.points[0]?.data;
         if (!data || data.fileId === undefined) return;
+        div._selectedHitKey = hitKey(data);
+        updateCombinedPlot();
         loadHitDetail(data.fileId);
     });
 }
@@ -529,7 +760,6 @@ function renderScanResults(scanData) {
 
     if (!scanData.hits.length) {
         showToast('warning', 'No proteins passed the thresholds. Try lowering them.');
-        UTILS.getElementByIdOrThrow('mpra-scan-tbody').innerHTML = '';
         return;
     }
 
@@ -542,6 +772,10 @@ function renderScanResults(scanData) {
     combinedDiv._scanNumLevels = numLevels;
     // clear any previous correlation traces for this file until user selects
     combinedDiv._corrTraces = [];
+    // a fresh scan invalidates any previously-selected hit's outline (its bar
+    // may no longer exist, or the same fileId/position could now mean a
+    // different run)
+    combinedDiv._selectedHitKey = null;
 
     // Map displayed filename back to its numeric file id (from scanData.file_meta)
     const fileNameToId = {};
@@ -590,6 +824,7 @@ loadExistingScoreFiles();
 UTILS.getElementByIdOrThrow('mpra-load-btn').addEventListener('click', loadMpraData);
 UTILS.getElementByIdOrThrow('mpra-compare-btn').addEventListener('click', compareSingleProtein);
 UTILS.getElementByIdOrThrow('mpra-scan-btn').addEventListener('click', scanLibrary);
+UTILS.getElementByIdOrThrow('mpra-corr-window-close').addEventListener('click', hideCorrelationTooltip);
 
 function initTooltips() {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));

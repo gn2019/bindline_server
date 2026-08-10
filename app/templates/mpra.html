@@ -44,6 +44,18 @@
                 <div id="mpra-combined-loading" class="loading-spinner d-none"></div>
             </div>
 
+            <!-- Tooltip-style preview: MPRA vs. predicted-effect points for whichever
+                 Corr.-line window is currently being hovered -->
+            <div id="mpra-corr-window" class="floating-window d-none">
+                <div class="floating-window-header">
+                    <span id="mpra-corr-window-title" class="floating-window-title">Correlation Points</span>
+                    <button type="button" class="btn-close-tooltip" id="mpra-corr-window-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="floating-window-body">
+                    <div id="mpra-corr-scatter-plot" style="width:100%;height:100%;"></div>
+                </div>
+            </div>
+
             <!-- Step 2: compare to a single protein -->
             <div class="card mb-3">
                 <div class="card-body">
@@ -99,9 +111,9 @@
                         <div class="col-auto">
                             <label class="form-label small mb-0">Score Type</label>
                             <div class="btn-group d-block">
-                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-escore" value="escore" checked>
+                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-escore" value="escore">
                                 <label class="btn btn-outline-primary btn-sm" for="mpra-scan-escore">E</label>
-                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-zscore" value="zscore">
+                                <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-zscore" value="zscore" checked>
                                 <label class="btn btn-outline-primary btn-sm" for="mpra-scan-zscore">Z</label>
                                 <input type="radio" class="btn-check" name="mpra_scan_file_type" id="mpra-scan-iscore" value="iscore">
                                 <label class="btn btn-outline-primary btn-sm" for="mpra-scan-iscore">I</label>
@@ -113,15 +125,15 @@
                         </div>
                         <div class="col-auto">
                             <label class="form-label small mb-0" for="mpra-corr-threshold" data-bs-toggle="tooltip" data-bs-placement="top" title="Threshold: |magnitude-weighted correlation| >= value. Filters proteins by correlation strength.">Correlation threshold</label>
-                            <input type="number" class="form-control form-control-sm" id="mpra-corr-threshold" value="0.85" step="0.05" min="-1" max="2">
+                            <input type="number" class="form-control form-control-sm" id="mpra-corr-threshold" value="0.95" step="0.05" min="-1" max="2">
                         </div>
                         <div class="col-auto">
                             <label class="form-label small mb-0" for="mpra-var-threshold" data-bs-toggle="tooltip" data-bs-placement="top" title="Threshold: max(|predicted effect|) >= value. Filters by minimum effect magnitude.">Effect-magnitude threshold</label>
-                            <input type="number" class="form-control form-control-sm" id="mpra-var-threshold" value="0.35" step="0.05">
+                            <input type="number" class="form-control form-control-sm" id="mpra-var-threshold" value="12" step="0.05">
                         </div>
                         <div class="col-auto">
                             <label class="form-label small mb-0" for="mpra-alpha" data-bs-toggle="tooltip" data-bs-placement="top" title="Weight factor for sign agreement in correlation calculation. Higher = more weight on sign matching.">Sign-agreement weight (alpha)</label>
-                            <input type="number" class="form-control form-control-sm" id="mpra-alpha" value="0.3" step="0.05" min="0" max="1">
+                            <input type="number" class="form-control form-control-sm" id="mpra-alpha" value="0" step="0.05" min="0" max="1">
                         </div>
                         <div class="col-auto">
                             <button class="btn btn-primary btn-sm" type="button" id="mpra-scan-btn">Scan Library</button>

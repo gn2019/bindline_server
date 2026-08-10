@@ -1,4 +1,5 @@
-import * as S from "./script_utils.js";
+import * as S from "./plot_utils.js";
+import * as UTILS from "./utils.js";
 
 $('#existing_score').on('select2:open', S.handleSelect2Paste);
 $('#pfam-select').on('select2:open', S.handleSelect2Paste);
