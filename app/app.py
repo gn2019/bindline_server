@@ -831,7 +831,7 @@ def mpra_scan_():
         E_ids = identifier.abs_ids[k]
         if len(ref_sequence) < max(k, window_size):
             continue
-        for idx, poss, scores in tf_window_hits(
+        for idx, poss, scores, directions in tf_window_hits(
                 E, ref_sequence, exp_matrix, w=window_size,
                 thr=corr_threshold, var_thr=var_threshold, k=k, alpha=alpha):
             hits.append({
@@ -839,6 +839,7 @@ def mpra_scan_():
                 'k': k,
                 'positions': poss.tolist(),
                 'scores': scores.tolist(),
+                'directions': directions.tolist(),
             })
 
     unq_file_ids = sorted({h['file_id'] for h in hits})

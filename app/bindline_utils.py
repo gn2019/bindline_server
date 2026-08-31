@@ -405,7 +405,7 @@ def windowed_effect_correlation(effects, T, w, alpha=0.3):
     r, sign_score, score : each (m, n - w + 1), or (m, 0) if n < w
         r is the plain (z-scored) Pearson-style correlation per window.
         sign_score is the magnitude-weighted sign agreement per window.
-        score = r + alpha * |sign_score| is the combined value used for thresholding.
+        score = |(1 - alpha) * r + alpha * sign_score| is the combined value used for thresholding.
     """
     effects = np.asarray(effects)
     T = np.asarray(T)
@@ -428,7 +428,7 @@ def windowed_effect_correlation(effects, T, w, alpha=0.3):
     wgt = np.abs(Tw[None, :, :])
     sign_agree = np.sign(Ew_all * Tw[None, :, :])
     sign_score = (sign_agree * wgt).sum(axis=2) / (wgt.sum(axis=2) + 1e-8)
-    score = (1 - alpha) * r + alpha * np.abs(sign_score)
+    score = np.abs((1 - alpha) * r + alpha * sign_score)
 
     return r, sign_score, score
 
@@ -445,9 +445,14 @@ def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
     - Effect magnitude threshold: max(|predicted effect|) >= var_thr (default 0.35)
     - Alpha parameter: weight factor for correlation calculation (default 0.3)
 
-    Returns a list of (row_index_in_E, window_start_positions, correlation_scores)
-    for TFs that have at least one window passing both the correlation and effect
-    magnitude thresholds.
+    Returns a list of (row_index_in_E, window_start_positions, correlation_scores,
+    directions) for TFs that have at least one window passing both the correlation
+    and effect magnitude thresholds. `directions` is +1.0/-1.0 per window: the sign
+    of (1 - alpha) * r + alpha * sign_score *before* it was abs'd into the ranking
+    score -- +1 means the window's predicted effect runs the same direction as the
+    real MPRA effect (activator-like), -1 means consistently opposite (repressor-
+    like). It can't be 0 for anything in this list: score = |signed value| >= thr
+    > 0 already guarantees signed != 0.
     """
     base = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
     s = np.fromiter((base[c] for c in seq), dtype=np.int8)
@@ -511,6 +516,11 @@ def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
         return []
 
     r, sign_score, score = windowed_effect_correlation(effects, T, w, alpha)
+    # score is already |signed|; recover the sign separately rather than
+    # re-deriving it from score (which lost it) -- signed can't be 0 for any
+    # window that ends up in `hits` below, since |signed| = score >= thr > 0.
+    signed = (1 - alpha) * r + alpha * sign_score
+    direction = np.sign(signed)
 
     altmax_all = effects + orig[:, :, None]
     Aw = sliding_window_view(altmax_all, (1, w, 3)).reshape(m, n - w + 1, w, 3)
@@ -522,9 +532,30 @@ def tf_window_hits(E, seq, T, w=5, thr=0.85, var_thr=0.35, k=8, alpha=0.3):
     for t in range(m):
         pos = np.where(mask[t])[0]
         if pos.size:
-            hits.append((t, pos, score[t, pos]))
+            hits.append((t, pos, score[t, pos], direction[t, pos]))
 
     return hits
+
+
+def _direction_label(directions):
+    """directions: list of +1.0/-1.0 (one per window in a merged run).
+    'activator' / 'repressor' if every window in the run agrees, 'mixed' if
+    a run somehow spans both (rare -- surfaced explicitly rather than
+    silently picking one, since that disagreement is itself informative)."""
+    uniq = {1 if float(d) > 0 else -1 for d in directions}
+    if uniq == {1}:
+        return 'activator'
+    if uniq == {-1}:
+        return 'repressor'
+    return 'mixed'
+
+
+def _finish_run(file_id, run_start, run_end, window_size, run_min, run_max, run_directions):
+    return {
+        'file_id': file_id, 'start': run_start, 'end': run_end + window_size - 1,
+        'score_min': run_min, 'score_max': run_max,
+        'direction': _direction_label(run_directions),
+    }
 
 
 def merge_window_hits(hits, window_size):
@@ -533,9 +564,10 @@ def merge_window_hits(hits, window_size):
     binding-site plot can draw one bar per run instead of one per window.
 
     `hits` is a list of dicts as built in mpra_scan_ (each with 'file_id',
-    'positions' - window start positions - and 'scores', one score per
-    position). A single protein (file_id) can appear in multiple `hits`
-    entries (once per k-mer length scanned), so positions/scores are first
+    'positions' - window start positions -, 'scores', and 'directions' -
+    +1.0/-1.0 per position, from tf_window_hits - one entry per position).
+    A single protein (file_id) can appear in multiple `hits` entries (once
+    per k-mer length scanned), so positions/scores/directions are first
     pooled per file_id across all of them before merging.
 
     Windows merge only when their *start positions* are consecutive
@@ -544,40 +576,42 @@ def merge_window_hits(hits, window_size):
     separate run unless start 4 is *also* a hit for that same protein, even
     though 3-7 and 5-9 would otherwise visually overlap.
 
-    Returns a list of {'file_id', 'start', 'end', 'score_min', 'score_max'}
-    dicts, one per merged run, sorted by (file_id, start).
+    Returns a list of {'file_id', 'start', 'end', 'score_min', 'score_max',
+    'direction'} dicts, one per merged run, sorted by (file_id, start).
+    'direction' is 'activator'/'repressor'/'mixed' -- see _direction_label.
     """
     positions_by_file = {}
     for hit in hits:
         pos_scores = positions_by_file.setdefault(hit['file_id'], [])
-        pos_scores.extend(zip(hit['positions'], hit['scores']))
+        pos_scores.extend(zip(hit['positions'], hit['scores'], hit['directions']))
 
     merged = []
     for file_id, pos_scores in positions_by_file.items():
         pos_scores.sort(key=lambda ps: ps[0])
         run_start = run_end = run_min = run_max = None
-        for pos, score in pos_scores:
+        run_directions = []
+        for pos, score, direction in pos_scores:
             if run_start is None:
                 run_start = run_end = pos
                 run_min = run_max = score
+                run_directions = [direction]
             elif pos == run_end:
                 # duplicate position from another k-mer-length pass
                 run_min, run_max = min(run_min, score), max(run_max, score)
+                run_directions.append(direction)
             elif pos == run_end + 1:
                 run_end = pos
                 run_min, run_max = min(run_min, score), max(run_max, score)
+                run_directions.append(direction)
             else:
-                merged.append({
-                    'file_id': file_id, 'start': run_start, 'end': run_end + window_size - 1,
-                    'score_min': run_min, 'score_max': run_max,
-                })
+                merged.append(_finish_run(file_id, run_start, run_end, window_size,
+                                           run_min, run_max, run_directions))
                 run_start = run_end = pos
                 run_min = run_max = score
+                run_directions = [direction]
         if run_start is not None:
-            merged.append({
-                'file_id': file_id, 'start': run_start, 'end': run_end + window_size - 1,
-                'score_min': run_min, 'score_max': run_max,
-            })
+            merged.append(_finish_run(file_id, run_start, run_end, window_size,
+                                       run_min, run_max, run_directions))
 
     merged.sort(key=lambda r: (r['file_id'], r['start']))
     return merged
@@ -651,7 +685,8 @@ def compute_full_sequence_correlation(ref_sequence, exp_matrix, effect_matrix, w
     Compute sliding-window correlation across the full sequence.
     Returns (positions, correlation_values) where:
     - positions: list of window start positions
-    - correlation_values: list of correlation scores for each window
+    - correlation_values: list of SIGNED correlation scores for each window
+      ((1 - alpha) * r + alpha * sign_score, not abs'd)
 
     IMPORTANT: `effect_matrix` must be the (len(ref_sequence), 3) predicted per-alt-base
     delta effect (ACGT order excluding the reference base per position) -- e.g. the
@@ -662,7 +697,14 @@ def compute_full_sequence_correlation(ref_sequence, exp_matrix, effect_matrix, w
 
     This calls the exact same windowed_effect_correlation() core that tf_window_hits
     uses (with a single track, m=1), so the two are guaranteed to agree for the same
-    inputs and can't silently diverge again.
+    inputs and can't silently diverge again. tf_window_hits abs()'s this value because
+    it needs a single ranking magnitude to threshold many candidate proteins against;
+    this function deliberately does NOT abs() it, because it drives a single human-
+    facing trace (the /mpra/single "Corr." line, one protein at a time) where the sign
+    itself is the useful part -- positive means this window's predicted effect runs the
+    same direction as the real MPRA effect (activator-like), negative means consistently
+    opposite (repressor-like). Collapsing that to magnitude here would silently discard
+    exactly the information a human looking at one protein's trace most wants to see.
     """
     exp_matrix = np.array(exp_matrix, dtype=np.float32)
     effect_matrix = np.array(effect_matrix, dtype=np.float32)
@@ -681,12 +723,12 @@ def compute_full_sequence_correlation(ref_sequence, exp_matrix, effect_matrix, w
         )
 
     # windowed_effect_correlation expects a (tracks, n, 3) array; we have a single track.
-    r, _sign_score, _score = windowed_effect_correlation(effect_matrix[None, :, :], exp_matrix, w, alpha)
+    r, sign_score, _score = windowed_effect_correlation(effect_matrix[None, :, :], exp_matrix, w, alpha)
 
-    # Report the same quantity tf_window_hits reports for its hits (the raw, magnitude-
-    # weighted-by-z-scoring Pearson correlation `r`), so the scan and MPRA pages show
-    # directly comparable numbers for the same TF/window.
+    # Same blend tf_window_hits ranks on ((1 - alpha) * r + alpha * sign_score), but
+    # signed rather than abs'd -- see the docstring above for why.
+    signed = (1 - alpha) * r + alpha * sign_score
     positions = list(range(n - w + 1))
-    correlation_values = _score[0].tolist()
+    correlation_values = signed[0].tolist()
 
     return positions, correlation_values

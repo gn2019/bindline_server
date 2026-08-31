@@ -66,7 +66,7 @@ export function loadExistingFiles() {
 }
 
 
-function handleSelect2Paste() {
+export function handleSelect2Paste() {
     const select = $(this);
     const input = select.data('select2').$container.find('.select2-search__field')[0];
 
@@ -126,7 +126,7 @@ function showScoreFile(file) {
     `);
 }
 
-async function loadSequences() {
+export async function loadSequences() {
     const fastaSource = getActiveTab('fasta-tabs');
     let formData = new FormData();
     if (fastaSource === 'fasta-upload') {
@@ -167,7 +167,7 @@ async function loadSequences() {
 }
 
 
-async function uploadAndPlot() {
+export async function uploadAndPlot() {
     showGlobalLoading(); // Show loading animation before request
 
     const formData = new FormData(UTILS.getElementByIdOrThrow('upload-form'));
@@ -505,7 +505,7 @@ function relayoutBindingSitesPlot(plotDiv) {
 }
 
 
-function groupPfams() {
+export function groupPfams() {
     const shouldGroupPfams = arePfamsGrouped();
     const plotDiv = UTILS.getElementByIdOrThrow('binding-sites-plot');
 
@@ -1028,13 +1028,16 @@ export function createBindingSiteBarTraces(scanData) {
         const scoreText = iv.score_min === iv.score_max
             ? iv.score_min.toFixed(2)
             : `${iv.score_min.toFixed(2)}-${iv.score_max.toFixed(2)}`;
+        // direction comes from the backend's merge_window_hits (activator/repressor/
+        // mixed -- see bindline_utils.py); older cached scan results won't have it.
+        const directionText = iv.direction ? `<br>${iv.direction}` : '';
         return {
             x: [iv.start, iv.end],
             y: [iv.level, iv.level],
             mode: 'lines',
             line: {color: `rgba(${hexToRGB(colorFor(iv.pfamName))}, 0.85)`, width: 8},
             showlegend: false,
-            hovertemplate: `${iv.filename} (${iv.pfamName})<br>pos ${iv.start}-${iv.end}<br>score ${scoreText}<extra></extra>`,
+            hovertemplate: `${iv.filename} (${iv.pfamName})<br>pos ${iv.start}-${iv.end}<br>score ${scoreText}${directionText}<extra></extra>`,
             fileId: iv.file_id, windowStart: iv.start, windowEnd: iv.end,
         };
     });
@@ -1398,14 +1401,14 @@ function highlightSequenceOnHover(plot) {
 }
 
 
-function resizePlotsInTab(tabSelector) {
+export function resizePlotsInTab(tabSelector) {
     const targetPane = document.querySelector(tabSelector);
     targetPane?.querySelectorAll(".js-plotly-plot").forEach(p => {
         Plotly.Plots.resize(p);
     });
 }
 
-function manageModeViews() {
+export function manageModeViews() {
     const viewModeRadio = getRadio("view-option");
     const stackedContainer = UTILS.getElementByIdOrThrow("stacked-container");
     const plotTabs = UTILS.getElementByIdOrThrow("plot-tabs");
@@ -1481,7 +1484,7 @@ export function initTooltips() {
     });
 }
 
-function showCookiesNotice() {
+export function showCookiesNotice() {
     const notice = UTILS.getElementByIdOrThrow("cookieNotice");
     const okBtn = UTILS.getElementByIdOrThrow("cookieOk");
 
@@ -1496,7 +1499,7 @@ function showCookiesNotice() {
 }
 
 
-function animateAllMutants() {
+export function animateAllMutants() {
     const shouldCenterOnWT = isCenteredOnWT();
     const plot = UTILS.getElementByIdOrThrow('all-mutants-plot');
 
@@ -1537,7 +1540,7 @@ function animateAllMutants() {
 }
 
 
-function importLocalFile() {
+export function importLocalFile() {
     // open file dialog
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
