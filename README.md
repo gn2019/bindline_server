@@ -141,10 +141,10 @@ Three SQLAlchemy models back the app (`app/database_setup.py`):
 
 Every PBM score file is parsed once into an in-memory `ResultTable` (`app/bindline.py`) and, for k-mer-based score types, also folded into a persisted matrix that `TFIdentifier` (`app/tfidentifier.py`) uses to scan across every protein at once.
 
-**Result tables.** `ResultFile` subclasses (`PWMFile`, `EScoreFile`, `ZScoreFile`, `IScoreFile`, each with a UniProbe- and a CIS-BP-format variant) parse a raw score file into one or more `ResultTable`s:
+**Result tables.** `ResultFile` subclasses (`EScoreFile`, `ZScoreFile`, `IScoreFile`, (and unused `PWMFile`) each with a UniProbe- and a CIS-BP-format variant) parse a raw score file into one or more `ResultTable`s:
 
-- **`PWMTable`** — a position-weight matrix, used to render a motif logo (`.to_logo()`) and to score a sequence by summing per-position log-odds.
 - **`EScoreTable`** (and its subclasses **`ZScoreTable`**, **`IScoreTable`**) — a flat dict mapping every k-mer to its score, used for E-score, Z-score, and I-score data. Scoring a sequence just looks up each of its k-mers; `rank_threshold()` turns a percentile (e.g. "top 5%") into an absolute score cutoff for binding-site detection.
+- (unused) **`PWMTable`** — a position-weight matrix, used to render a motif logo (`.to_logo()`) and to score a sequence by summing per-position log-odds.
 
 **Match matrices.** Cross-protein scanning ("search every available PBM dataset for k-mers that clear a threshold") would be far too slow if it had to re-parse every protein's score file on every request. Instead, `EScoreTable.vectorize()` turns a protein's score dict into a dense vector of length 4^k (one entry per k-mer, in a fixed A/C/G/T order), and `TFIdentifier` stacks every protein's vector into one `(num_proteins × 4^k)` NumPy matrix per k-mer length — so a scan across the whole library becomes a single vectorized matrix operation instead of a loop over files.
 
